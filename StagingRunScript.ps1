@@ -1,3 +1,3 @@
 ﻿$AzureADUsersExport = Export-AzureUsers
 $AzureADUsersDataTable = Convert-PSObjectToDataTable -InputObject $AzureADUsersExport
-Import-DataTableToSQLBulkCopy -SQLTable 'AzureUsersStaging' -Database $MigrationDatabaseSQLDB -ConnectionString $SQLConnectionString -DataTable $AzureADUsersDataTable -ValidateColumnMappings -TruncateSQLTable 
+Import-DataTableToSQLBulkCopy -SQLTable 'AzureUsersStaging' -sqlConnectionName 'MPT' -ValidateColumnMappings -TruncateSQLTable
