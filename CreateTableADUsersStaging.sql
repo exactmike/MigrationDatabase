@@ -64,5 +64,5 @@ CREATE TABLE [dbo].[ADUsersStaging](
     SourceOrganization [nvarchar](510) NULL,
     SurName [nvarchar](510) NULL,
     targetAddress [nvarchar](510) NULL,
-    userPrincipalName [nvarchar](510) NULL,
+    userPrincipalName [nvarchar](510) NULL
 );
