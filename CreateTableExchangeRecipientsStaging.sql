@@ -43,7 +43,7 @@ CREATE TABLE [dbo].[ADUsersStaging](
     Guid [nvarchar](MAX) NULL,
     HasActiveSyncDevicePartnership [nvarchar](MAX) NULL,
     HiddenFromAddressListsEnabled [nvarchar](MAX) NULL,
-    Identity [nvarchar](MAX) NULL,
+    [Identity] [nvarchar](MAX) NULL,
     IsValid [nvarchar](MAX) NULL,
     IsValidSecurityPrincipal [nvarchar](MAX) NULL,
     LastName [nvarchar](MAX) NULL,
