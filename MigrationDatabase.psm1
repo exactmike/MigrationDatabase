@@ -1,32 +1,36 @@
-function Get-DataTableType 
+##########################################################################################################
+#Utility and Support Functions
+##########################################################################################################
+function Get-DataTableType
+{
+[cmdletbinding()]
+param(
+    $type
+)
+$types = @(
+    'System.Boolean',
+    'System.Byte[]',
+    'System.Byte',
+    'System.Char',
+    'System.Datetime',
+    'System.Decimal',
+    'System.Double',
+    'System.Guid',
+    'System.Int16',
+    'System.Int32',
+    'System.Int64',
+    'System.Single',
+    'System.UInt16',
+    'System.UInt32',
+    'System.UInt64'
+)
+if ($types -contains $type)
 { 
-    param($type) 
- 
-$types = @( 
-'System.Boolean', 
-'System.Byte[]', 
-'System.Byte', 
-'System.Char', 
-'System.Datetime', 
-'System.Decimal', 
-'System.Double', 
-'System.Guid', 
-'System.Int16', 
-'System.Int32', 
-'System.Int64', 
-'System.Single', 
-'System.UInt16', 
-'System.UInt32', 
-'System.UInt64') 
- 
-    if ( $types -contains $type ) { 
-        Write-Output "$type" 
-    } 
-    else { 
-        Write-Output 'System.String' 
-         
-    } 
-} #Get-Type 
+    Write-Output "$type" 
+} else {
+    Write-Output 'System.String' 
+} 
+}#Function Get-Type
 function Convert-PSObjectToDataTable 
 { 
 <# 
@@ -111,50 +115,89 @@ function Import-DataTableToSQLBulkCopy
 [cmdletbinding(SupportsShouldProcess,ConfirmImpact = 'High')]
 param
 (
-$SQLTable
+[Parameter(Mandatory)]
+[string]$SQLTable
 ,
-$Database = $MigrationDatabaseSQLDB
+[Parameter(Mandatory)]
+[string]$SQLConnectionName
 ,
-[string]$ConnectionString = $ConnectionString
-,
+[Parameter(Mandatory)]
 [System.Data.DataTable]$DataTable
 ,
 [switch]$ValidateColumnMappings
 ,
 [switch]$TruncateSQLTable
 )
+$SQLConnection = @($SQLConnections | Where-Object -FilterScript {$_.Name -eq $SQLConnectionName})
+switch ($SQLConnection.Count)
+{
+    1
+    {
+        $SQLConnection = $SQLConnection[0]
+    }
+    0
+    {
+        $message = "No SQL Connection found for SQLConnectionName $SQLConnectionName"
+        $NoSQLConnectionError = New-ErrorRecord -Exception System.Management.Automation.RuntimeException -ErrorCategory InvalidArgument -TargetObject $SQLConnectionName -ErrorId 1 -Message $message
+        Write-Log -Message $message -ErrorLog
+        $PSCmdlet.ThrowTerminatingError($NoSQLConnectionError)
+    }
+    Default 
+    {
+        $message = "Ambiguous SQL Connection(s) found for SQLConnectionName $SQLConnectionName"
+        $AmbSQLConnectionError = New-ErrorRecord -Exception System.Management.Automation.RuntimeException -ErrorCategory InvalidArgument -TargetObject $SQLConnectionName -ErrorId 1 -Message $message
+        Write-Log -Message $message -ErrorLog
+        $PSCmdlet.ThrowTerminatingError($AmbSQLConnectionError)
+    }
+}
 $PropertyNames = $DataTable.Columns.ColumnName
+#Validate the Columns (compare table columns to datatable object columns)
 if ($ValidateColumnMappings)
 {
-    $TableColumnsQuery = "SELECT name FROM sys.columns WHERE object_id = OBJECT_ID($($SQLTable))"
+    $TableColumnsQuery = "SELECT name FROM sys.columns WHERE object_id = OBJECT_ID('$($SQLTable)')"
     try
     {
         $message = "Get $SQLTable Column List to validate columns for bulk import"
         Write-Log -Message $message -EntryType Attempting 
-        $SQLTableColumns = Invoke-Sqlcmd -Query $TableColumnsQuery @InvokeSQLCMDParams -ErrorAction Stop | Select-Object -ExpandProperty Name -ErrorAction Stop
+        $SQLTableColumns = Invoke-SQLServerQuery -sql $TableColumnsQuery -connection $SQLConnection -ErrorAction Stop | Select-Object -ExpandProperty Name -ErrorAction Stop
         Write-Log -Message $message -EntryType Succeeded 
     }
     catch
     {
-        Write-Log -Message $error[0].ToString() -ErrorLog
+        $MyError = $_
+        Write-Log -Message $($myerror.ToString()) -ErrorLog
         Write-Log -Message $message -EntryType Failed -Verbose -ErrorLog
-        $PSCmdlet.ThrowTerminatingError($error[0])
+        $PSCmdlet.ThrowTerminatingError($myerror)
     }
-    $comparisonResults = @(Compare-Object -ReferenceObject $SQLTableColumns -DifferenceObject $PropertyNames -CaseSensitive)
+    $comparisonResults = @(Compare-Object -ReferenceObject $SQLTableColumns -DifferenceObject $PropertyNames -CaseSensitive -ErrorAction Stop)
     if ($comparisonResults.count -ne 0)
     {
         Write-Verbose $comparisonResults
-        $error = New-ErrorRecord -Exception System.NotSupportedException -Message "SQL Table $SQLTable and export data from this function do not match." -ErrorCategory InvalidData -TargetObject $SQLTable -ErrorId "1"
+        $error = New-ErrorRecord -Exception System.NotSupportedException -Message "SQL Table $SQLTable columns and DataTable columns do not match." -ErrorCategory InvalidData -TargetObject $SQLTable -ErrorId "1"
         $PSCmdlet.ThrowTerminatingError($error)
     }
 }
-#Truncate the Staging Table
+#Truncate the Staging Table if requested
 if ($TruncateSQLTable -and $PSCmdlet.ShouldProcess($SQLTable,'Truncate Table'))
 {
-    Invoke-Sqlcmd @InvokeSQLCMDParams -query "TRUNCATE TABLE $SQLTable"
+    try
+    {
+        $message = "Truncate Table $SQLTable in Database $($SQLConnection.Database)."
+        Write-Log -Message $message -EntryType Attempting 
+        Invoke-SQLServerQuery -sql "TRUNCATE TABLE $SQLTable" -connection $SQLConnection -ErrorAction Stop
+        Write-Log -Message $message -EntryType Succeeded
+    }
+    catch
+    {
+        $MyError = $_
+        Write-Log -Message $($myerror.ToString()) -ErrorLog
+        Write-Log -Message $message -EntryType Failed -Verbose -ErrorLog
+        $PSCmdlet.ThrowTerminatingError($myerror)
+    }
 }
 
 #Do the Bulk Insert into the Staging Table
+$bulkCopy = new-object ("Data.SqlClient.SqlBulkCopy") $($SQLConnection.ConnectionString)
 $bulkCopy.ColumnMappings.Clear()
 $PropertyNames | foreach {$bulkCopy.ColumnMappings.Add($_,$_) | out-null} 
 $bulkCopy.BatchSize = $DataTable.Rows.Count
@@ -164,32 +207,50 @@ $bulkCopy.WriteToServer($DataTable)
 $bulkCopy.BatchSize = $null
 $bulkCopy.ColumnMappings.Clear()
 $bulkCopy.Close()
+$bulkCopy.Dispose()
 }
-function Initialize-SQLConnection
+##########################################################################################################
+#Initial Database Configuration
+##########################################################################################################
+function Initialize-Database
 {
 [cmdletbinding()]
 param
 (
-$SQLDatabase = 'MigrationPAndT'
+[string]$Database = 'MigrationPAndT'
 ,
-$SQLServer = 'USGVLW10-01'
+[string]$ComputerName = $(hostname.exe)
 )
-import-module SQLPS -DisableNameChecking -Force -Global
-[string]$Global:MigrationDatabaseSQLServer=$SQLServer
-[string]$Global:MigrationDatabaseSQLDB=$SQLDatabase
-#Setup Invoke-SQLCMDParams
-$Global:InvokeSQLCMDParams=@{
-    ServerInstance = $MigrationDatabaseSQLServer
-    Database = $MigrationDatabaseSQLDB
-}
-#Setup SQL Connection String for non-InvokeSQLCmd activities
-$Global:SQLConnectionString = "Server=$MigrationDatabaseSQLServer,1433;Database=$MigrationDatabaseSQLDB;Trusted_Connection=True;Connection Timeout=30;"
-$Global:bulkCopy = new-object ("Data.SqlClient.SqlBulkCopy") $Global:SQLConnectionString
-$Global:bulkCopy.BulkCopyTimeout = 0
-}
-function Export-AzureUsers
+Import-Module -Global -Name POSH_Ado_SQLServer
+$SQLServerConnection = New-SQLServerConnection -server $ComputerName
+#Add code to check for DB existence: select name from sys.databases
+$checkDBs = 'SELECT name FROM sys.databases'
+$ExistingDatabases = Invoke-SQLServerQuery -sql $checkDBs -connection $SQLServerConnection
+if ($Database -notin $ExistingDatabases)
 {
-param(
+    #Create DB
+    $dbcreate = "CREATE DATABASE $Database"
+    Invoke-SQLServerQuery -sql $dbcreate -connection $SQLServerConnection
+}
+#Add Database to SQLServerConnection
+$SQLServerConnection.Close()
+$SQLServerConnection = New-SQLServerConnection -server $ComputerName -database $Database
+#CreateTables
+$CreateTableQueries = get-childitem -Path $PSScriptRoot -Filter "CreateTable*.sql"
+$checkTables = 'SELECT name FROM sys.Tables'
+$ExistingTables = 
+foreach ($query in $CreateTableQueries)
+{
+    $TableName = 
+    $sql = Get-Content -Path $query.FullName -Raw
+    Invoke-SQLServerQuery -sql $sql -connection $SQLServerConnection
+}
+}#Function Initialize-SQLDatabase
+function Export-AzureADUser
+{
+[cmdletbinding()]
+param
+(
 )
 #Get Data from Azure AD
 $SourceOrganization = Get-MsolDomain | Where-Object -FilterScript {$_.IsInitial -eq $true} | Select-Object -ExpandProperty Name
@@ -204,7 +265,40 @@ $propertyset += @{n='ObjectId';e={$_.ObjectID.guid}}
 $propertyset += @{n='ServiceStatus';e={$($_.Licenses | Select-Object -ExpandProperty ServiceStatus | ForEach-Object {"$($_.ServicePlan.ServiceName)=$($_.ProvisioningStatus)"}) -join '|'}}
 $propertyset += @{n='SourceOrganization';e={$SourceOrganization}}
 $AzureADUsersExport = @($AllAzureADUsers | Select-Object -Property $propertyset)
-#Compare Retrieved Data with Table Columns and alert admin of problems
-$AzureADUsersExport
+Write-Output $AzureADUsersExport
 }
-
+function Export-ADUser
+{
+[cmdletbinding()]
+param
+(
+[parameter(Mandatory)]
+$SourceAD
+,
+$Filter
+,
+$Properties = $(Get-OneShellVariableValue -Name AllADAttributesToRetrieve)
+,
+$PropertySet
+)
+#Get Data from Active Directory
+#$SourceAD = 'esgc'
+Push-Location
+Set-Location "$($SourceAD):\"
+$RawADUsers = Get-ADUser -LDAPFilter '(&((sAMAccountType=805306368))(!(userAccountControl:1.2.840.113556.1.4.803:=2)))' -Properties  $Properties | Select-Object -Property $Properties -ErrorAction SilentlyContinue
+Pop-Location
+$MVAttributes = @('msExchPoliciesExcluded','msexchextensioncustomattribute1','msexchextensioncustomattribute2','msexchextensioncustomattribute3','msexchextensioncustomattribute4','msexchextensioncustomattribute5','memberof','proxyAddresses')
+$SVAttributes = @('altRecipient','forwardingAddress','msExchGenericForwardingAddress','cn','userPrincipalName','sAMAccountName','CanonicalName','GivenName','SurName','DistinguishedName','ObjectGUID','displayName','employeeNumber','employeeID','Mail','mailNickname','homeMDB','homeMTA','msExchHomeServerName','legacyExchangeDN','msExchArchiveGUID','msExchArchiveName','msExchMailboxGUID','msExchMasterAccountSID','msExchUserCulture','targetAddress','msExchRecipientDisplayType','msExchRecipientTypeDetails','msExchRemoteRecipientType','msExchVersion','extensionattribute1','extensionattribute2','extensionattribute3','extensionattribute4','extensionattribute5','extensionattribute6','extensionattribute7','extensionattribute8','extensionattribute9','extensionattribute10','extensionattribute11','extensionattribute12','extensionattribute13','extensionattribute14','extensionattribute15','canonicalname','department','deliverandRedirect','distinguishedName','msExchHideFromAddressLists','msExchUsageLocation','c','co','country','physicalDeliveryOfficeName')
+$propertyset = Get-CSVExportPropertySet -Delimiter '|' -MultiValuedAttributes $MVAttributes -ScalarAttributes $SVAttributes 
+$propertyset += @{n='mS-DS-ConsistencyGuid';e={(Get-GuidFromByteArray -GuidByteArray $_.'mS-DS-ConsistencyGuid').guid}}
+$propertyset += @{n='msExchMailboxGUID';e={(Get-GuidFromByteArray -GuidByteArray $_.msExchMailboxGUID).guid}}
+$propertyset += @{n='msExchArchiveGUID';e={(Get-GuidFromByteArray -GuidByteArray $_.msExchArchiveGUID).guid}}
+$propertyset += @{n='SourceOrganization';e={$SourceAD}}
+$ADUsersexport = @($RawADUsers | Select-Object -Property $propertyset -ExcludeProperty msExchMailboxGUID,msExchArchiveGUID -ErrorAction SilentlyContinue) #,CanonicalName,DistinguishedName)
+Write-Output $ADUsersexport
+}
+function Get-SourceData
+{
+#Get latest data from SQL 
+$SourceData = Invoke-Sqlcmd -Query 'Select * from dbo.MigrationCandidateList' @Global:InvokeSQLParams | Select-Object -Property * -ExcludeProperty Item
+}

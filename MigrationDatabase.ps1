@@ -115,10 +115,13 @@ function Import-DataTableToSQLBulkCopy
 [cmdletbinding(SupportsShouldProcess,ConfirmImpact = 'High')]
 param
 (
+[Parameter(Mandatory)]
 [string]$SQLTable
 ,
+[Parameter(Mandatory)]
 [string]$SQLConnectionName
 ,
+[Parameter(Mandatory)]
 [System.Data.DataTable]$DataTable
 ,
 [switch]$ValidateColumnMappings
@@ -166,7 +169,7 @@ if ($ValidateColumnMappings)
         Write-Log -Message $message -EntryType Failed -Verbose -ErrorLog
         $PSCmdlet.ThrowTerminatingError($myerror)
     }
-    $comparisonResults = @(Compare-Object -ReferenceObject $SQLTableColumns -DifferenceObject $PropertyNames -CaseSensitive)
+    $comparisonResults = @(Compare-Object -ReferenceObject $SQLTableColumns -DifferenceObject $PropertyNames -CaseSensitive -ErrorAction Stop)
     if ($comparisonResults.count -ne 0)
     {
         Write-Verbose $comparisonResults
@@ -243,7 +246,7 @@ foreach ($query in $CreateTableQueries)
     Invoke-SQLServerQuery -sql $sql -connection $SQLServerConnection
 }
 }#Function Initialize-SQLDatabase
-function Export-AzureUsers
+function Export-AzureADUser
 {
 [cmdletbinding()]
 param
@@ -263,6 +266,36 @@ $propertyset += @{n='ServiceStatus';e={$($_.Licenses | Select-Object -ExpandProp
 $propertyset += @{n='SourceOrganization';e={$SourceOrganization}}
 $AzureADUsersExport = @($AllAzureADUsers | Select-Object -Property $propertyset)
 Write-Output $AzureADUsersExport
+}
+function Export-ADUser
+{
+[cmdletbinding()]
+param
+(
+[parameter(Mandatory)]
+$SourceAD
+,
+$Filter
+,
+$Properties = $(Get-OneShellVariableValue -Name AllADAttributesToRetrieve)
+,
+$PropertySet
+)
+#Get Data from Active Directory
+#$SourceAD = 'esgc'
+Push-Location
+Set-Location "$($SourceAD):\"
+$RawADUsers = Get-ADUser -LDAPFilter '(&((sAMAccountType=805306368))(!(userAccountControl:1.2.840.113556.1.4.803:=2)))' -Properties  $Properties | Select-Object -Property $Properties -ErrorAction SilentlyContinue
+Pop-Location
+$MVAttributes = @('msExchPoliciesExcluded','msexchextensioncustomattribute1','msexchextensioncustomattribute2','msexchextensioncustomattribute3','msexchextensioncustomattribute4','msexchextensioncustomattribute5','memberof','proxyAddresses')
+$SVAttributes = @('altRecipient','forwardingAddress','msExchGenericForwardingAddress','cn','userPrincipalName','sAMAccountName','CanonicalName','GivenName','SurName','DistinguishedName','ObjectGUID','displayName','employeeNumber','employeeID','Mail','mailNickname','homeMDB','homeMTA','msExchHomeServerName','legacyExchangeDN','msExchArchiveGUID','msExchArchiveName','msExchMailboxGUID','msExchMasterAccountSID','msExchUserCulture','targetAddress','msExchRecipientDisplayType','msExchRecipientTypeDetails','msExchRemoteRecipientType','msExchVersion','extensionattribute1','extensionattribute2','extensionattribute3','extensionattribute4','extensionattribute5','extensionattribute6','extensionattribute7','extensionattribute8','extensionattribute9','extensionattribute10','extensionattribute11','extensionattribute12','extensionattribute13','extensionattribute14','extensionattribute15','canonicalname','department','deliverandRedirect','distinguishedName','msExchHideFromAddressLists','msExchUsageLocation','c','co','country','physicalDeliveryOfficeName')
+$propertyset = Get-CSVExportPropertySet -Delimiter '|' -MultiValuedAttributes $MVAttributes -ScalarAttributes $SVAttributes 
+$propertyset += @{n='mS-DS-ConsistencyGuid';e={(Get-GuidFromByteArray -GuidByteArray $_.'mS-DS-ConsistencyGuid').guid}}
+$propertyset += @{n='msExchMailboxGUID';e={(Get-GuidFromByteArray -GuidByteArray $_.msExchMailboxGUID).guid}}
+$propertyset += @{n='msExchArchiveGUID';e={(Get-GuidFromByteArray -GuidByteArray $_.msExchArchiveGUID).guid}}
+$propertyset += @{n='SourceOrganization';e={$SourceAD}}
+$ADUsersexport = @($RawADUsers | Select-Object -Property $propertyset -ExcludeProperty msExchMailboxGUID,msExchArchiveGUID -ErrorAction SilentlyContinue) #,CanonicalName,DistinguishedName)
+Write-Output $ADUsersexport
 }
 function Get-SourceData
 {
