@@ -2,6 +2,7 @@ USE [MigrationPandT];
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 CREATE TABLE [dbo].[ADUsersStaging](
+    SourceOrganization  [nvarchar](MAX) NULL,
     ActiveSyncMailboxPolicy [nvarchar](MAX) NULL,
     ActiveSyncMailboxPolicyIsDefaulted [nvarchar](MAX) NULL,
     AddressBookPolicy [nvarchar](MAX) NULL,
@@ -28,7 +29,7 @@ CREATE TABLE [dbo].[ADUsersStaging](
     CustomAttribute7 [nvarchar](MAX) NULL,
     CustomAttribute8 [nvarchar](MAX) NULL,
     CustomAttribute9 [nvarchar](MAX) NULL,
-    Database [nvarchar](MAX) NULL,
+    [Database] [nvarchar](MAX) NULL,
     DatabaseName [nvarchar](MAX) NULL,
     Department [nvarchar](MAX) NULL,
     DisplayName [nvarchar](MAX) NULL,
