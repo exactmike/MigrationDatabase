@@ -172,7 +172,7 @@ if ($ValidateColumnMappings)
     $comparisonResults = @(Compare-Object -ReferenceObject $SQLTableColumns -DifferenceObject $PropertyNames -CaseSensitive -ErrorAction Stop)
     if ($comparisonResults.count -ne 0)
     {
-        Write-Verbose $comparisonResults
+        Write-Output $comparisonResults
         $error = New-ErrorRecord -Exception System.NotSupportedException -Message "SQL Table $SQLTable columns and DataTable columns do not match." -ErrorCategory InvalidData -TargetObject $SQLTable -ErrorId "1"
         $PSCmdlet.ThrowTerminatingError($error)
     }
