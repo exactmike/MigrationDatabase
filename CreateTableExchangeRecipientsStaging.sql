@@ -73,7 +73,6 @@ CREATE TABLE [dbo].[ExchangeRecipientsStaging](
     RecipientTypeDetails [nvarchar](MAX) NULL,
     ResourceType [nvarchar](MAX) NULL,
     RetentionPolicy [nvarchar](MAX) NULL,
-    RunspaceId [nvarchar](MAX) NULL,
     SamAccountName [nvarchar](MAX) NULL,
     ServerLegacyDN [nvarchar](MAX) NULL,
     ServerName [nvarchar](MAX) NULL,
