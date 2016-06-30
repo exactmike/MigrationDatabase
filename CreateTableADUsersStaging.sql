@@ -37,7 +37,7 @@ CREATE TABLE [dbo].[ADUsersStaging](
     Mail [nvarchar](510) NULL,
     mailNickname [nvarchar](510) NULL,
     memberof [nvarchar](510) NULL,
-    mS-DS-ConsistencyGuid [nvarchar](510) NULL,
+    [mS-DS-ConsistencyGuid] [nvarchar](510) NULL,
     msExchArchiveGUID [nvarchar](510) NULL,
     msExchArchiveName [nvarchar](510) NULL,
     msexchextensioncustomattribute1 [nvarchar](1024) NULL,
