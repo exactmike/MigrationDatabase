@@ -225,7 +225,7 @@ Import-Module -Global -Name POSH_Ado_SQLServer
 $SQLServerConnection = New-SQLServerConnection -server $ComputerName
 #Add code to check for DB existence: select name from sys.databases
 $checkDBs = 'SELECT name FROM sys.databases'
-$ExistingDatabases = Invoke-SQLServerQuery -sql $checkDBs -connection $SQLServerConnection
+$ExistingDatabases = Invoke-SQLServerQuery -sql $checkDBs -connection $SQLServerConnection | Select-object -ExpandProperty Name
 if ($Database -notin $ExistingDatabases)
 {
     #Create DB
