@@ -237,11 +237,10 @@ $SQLServerConnection.Close()
 $SQLServerConnection = New-SQLServerConnection -server $ComputerName -database $Database
 #CreateTables
 $CreateTableQueries = get-childitem -Path $PSScriptRoot -Filter "CreateTable*.sql"
-$checkTables = 'SELECT name FROM sys.Tables'
-$ExistingTables = 
+$ExistingTables = 'SELECT name FROM sys.Tables'
 foreach ($query in $CreateTableQueries)
 {
-    $TableName = 
+    #$TableName = $query.Name.Split('CreateTable')[]
     $sql = Get-Content -Path $query.FullName -Raw
     Invoke-SQLServerQuery -sql $sql -connection $SQLServerConnection
 }
