@@ -292,8 +292,9 @@ $propertyset = Get-CSVExportPropertySet -Delimiter '|' -MultiValuedAttributes $M
 $propertyset += @{n='mS-DS-ConsistencyGuid';e={(Get-GuidFromByteArray -GuidByteArray $_.'mS-DS-ConsistencyGuid').guid}}
 $propertyset += @{n='msExchMailboxGUID';e={(Get-GuidFromByteArray -GuidByteArray $_.msExchMailboxGUID).guid}}
 $propertyset += @{n='msExchArchiveGUID';e={(Get-GuidFromByteArray -GuidByteArray $_.msExchArchiveGUID).guid}}
+$propertyset += @{n='ObjectGUID';e={$_.ObjectGUID.guid}}
 $propertyset += @{n='SourceOrganization';e={$SourceAD}}
-$ADUsersexport = @($RawADUsers | Select-Object -Property $propertyset -ExcludeProperty msExchMailboxGUID,msExchArchiveGUID -ErrorAction SilentlyContinue) #,CanonicalName,DistinguishedName)
+$ADUsersexport = @($RawADUsers | Select-Object -Property $propertyset -ExcludeProperty ObjectGUID,msExchMailboxGUID,msExchArchiveGUID -ErrorAction SilentlyContinue) #,CanonicalName,DistinguishedName)
 Write-Output $ADUsersexport
 }
 function Get-SourceData
