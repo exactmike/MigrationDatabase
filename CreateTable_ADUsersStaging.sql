@@ -14,6 +14,7 @@ CREATE TABLE [dbo].[ADUsersStaging](
     DistinguishedName [nvarchar](MAX) NULL,
     employeeID [nvarchar](MAX) NULL,
     employeeNumber [nvarchar](MAX) NULL,
+    enabled [nvarchar](MAX) NULL,
     extensionattribute1 [nvarchar](MAX) NULL,
     extensionattribute10 [nvarchar](MAX) NULL,
     extensionattribute11 [nvarchar](MAX) NULL,
@@ -50,6 +51,7 @@ CREATE TABLE [dbo].[ADUsersStaging](
     msExchHomeServerName [nvarchar](MAX) NULL,
     msExchMailboxGUID [nvarchar](MAX) NULL,
     msExchMasterAccountSID [nvarchar](MAX) NULL,
+    msExchWhenMailboxCreated [nvarchar](MAX) NULL,
     msExchPoliciesExcluded [nvarchar](MAX) NULL,
     msExchRecipientDisplayType [nvarchar](MAX) NULL,
     msExchRecipientTypeDetails [nvarchar](MAX) NULL,
@@ -57,6 +59,7 @@ CREATE TABLE [dbo].[ADUsersStaging](
     msExchUsageLocation [nvarchar](MAX) NULL,
     msExchUserCulture [nvarchar](MAX) NULL,
     msExchVersion [nvarchar](MAX) NULL,
+    msRTCSIP-UserEnabled [nvarchar](MAX) NULL,
     ObjectGUID [nvarchar](MAX) NULL,
     physicalDeliveryOfficeName [nvarchar](MAX) NULL,
     proxyAddresses [nvarchar](MAX) NULL,
@@ -64,5 +67,11 @@ CREATE TABLE [dbo].[ADUsersStaging](
     SourceOrganization [nvarchar](MAX) NULL,
     SurName [nvarchar](MAX) NULL,
     targetAddress [nvarchar](MAX) NULL,
-    userPrincipalName [nvarchar](MAX) NULL
+    userPrincipalName [nvarchar](MAX) NULL,
+    whenChanged [nvarchar](MAX) NULL,
+    whenCreated [nvarchar](MAX) NULL,
+    AccountExpirationDate [nvarchar](MAX) NULL,
+    LastLogonDate [nvarchar](MAX) NULL,
+    createTimeStamp [nvarchar](MAX) NULL,
+    modifyTimeStamp [nvarchar](MAX) NULL
 );

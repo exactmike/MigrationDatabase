@@ -221,7 +221,6 @@ param
 ,
 [string]$ComputerName = $(hostname.exe)
 )
-Import-Module -Global -Name POSH_Ado_SQLServer
 $SQLServerConnection = New-SQLServerConnection -server $ComputerName
 #Add code to check for DB existence: select name from sys.databases
 $checkDBs = 'SELECT name FROM sys.databases'
@@ -238,11 +237,29 @@ $SQLServerConnection = New-SQLServerConnection -server $ComputerName -database $
 #CreateTables
 $CreateTableQueries = get-childitem -Path $PSScriptRoot -Filter "CreateTable*.sql"
 $ExistingTables = 'SELECT name FROM sys.Tables'
+$ExistingTablesJoin = $ExistingTables -join ';'
+Write-Log -Message "Existing Tables in Database $Database are: $ExistingTablesJoin" -EntryType Notification
 foreach ($query in $CreateTableQueries)
 {
-    #$TableName = $query.Name.Split('CreateTable')[]
-    $sql = Get-Content -Path $query.FullName -Raw
-    Invoke-SQLServerQuery -sql $sql -connection $SQLServerConnection
+    $TableName = $query.Name.Split('_')[1].split('.')[0]
+    if ($TableName -notin $ExistingTables)
+    {
+        $message = "Create $TableName in $Database"
+        try
+        {
+            Write-Log -Message $message -EntryType Attempting
+            $sql = Get-Content -Path $query.FullName -Raw -ErrorAction Stop
+            Invoke-SQLServerQuery -sql $sql -connection $SQLServerConnection -ErrorAction Stop
+            Write-Log -Message $message -EntryType Succeeded
+        }
+        catch
+        {
+            $MyError = $_
+            Write-Log -Message $message -EntryType Failed -ErrorLog -Verbose
+            Write-Log -Message $MyError.tostring() -ErrorLog
+        }
+    }
+    
 }
 }#Function Initialize-SQLDatabase
 ##########################################################################################################
