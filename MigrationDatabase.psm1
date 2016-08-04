@@ -284,7 +284,6 @@ $Properties = $(Get-OneShellVariableValue -Name AllADAttributesToRetrieve)
 $PropertySet
 )
 #Get Data from Active Directory
-#$SourceAD = 'esgc'
 Push-Location
 Set-Location "$($SourceAD):\"
 $RawADUsers = Get-ADUser -LDAPFilter '(&((sAMAccountType=805306368))(!(userAccountControl:1.2.840.113556.1.4.803:=2)))' -Properties  $Properties | Select-Object -Property $Properties -ErrorAction SilentlyContinue
@@ -312,8 +311,6 @@ $Filter
 ,
 $PropertySet
 )
-#Get Data from Active Directory
-#$SourceAD = 'esgc'
 Connect-Exchange -ExchangeOrganization $ExchangeOrganization
 $Splat = @{
     ResultSize = 'Unlimited'
