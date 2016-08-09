@@ -27,8 +27,8 @@ CREATE TABLE [dbo].[MailboxStatisticsStaging](
     [StorageLimitStatus] [NVARCHAR](256) NULL,
     [TotalDeletedItemSize] [NVARCHAR](256) NULL,
     [TotalItemSize] [NVARCHAR](256) NULL,
-    TotalItemSizeInBytes [INT64] NULL,
-    TotalDeletedItemSizeInBytes [INT64] NULL,
+    TotalItemSizeInBytes [BIGINT] NULL,
+    TotalDeletedItemSizeInBytes [BIGINT] NULL,
     TotalItemSizeInGB [decimal](6,2) NULL,
     TotalDeletedItemSizeGB [decimal](6,2) NULL,
 );
