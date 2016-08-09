@@ -3,10 +3,10 @@ SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 CREATE TABLE [dbo].[MailboxStatisticsStaging](
     SourceOrganization  [nvarchar](36) NULL,
-    [AssociatedItemCount] [INT64] NULL,
+    [AssociatedItemCount] [BIGINT] NULL,
     [Database] [NVARCHAR](256) NULL,
     [DatabaseName] [NVARCHAR](256) NULL,
-    [DeletedItemCount] [INT64] NULL,
+    [DeletedItemCount] [BIGINT] NULL,
     [DisconnectDate] [DateTime] NULL,
     [DisconnectReason] [NVARCHAR](36) NULL,
     [DisplayName] [NVARCHAR](256) NULL,
@@ -14,7 +14,7 @@ CREATE TABLE [dbo].[MailboxStatisticsStaging](
     [IsArchiveMailbox] [bit] NULL,
     [IsQuarantined] [bit] NULL,
     [IsValid] [bit] NULL,
-    [ItemCount] [INT64] NULL,
+    [ItemCount] [BIGINT] NULL,
     [LastLoggedOnUserAccount] [NVARCHAR](256) NULL,
     [LastLogoffTime] [DateTime] NULL,
     [LastLogonTime] [DateTime] NULL,
@@ -29,6 +29,6 @@ CREATE TABLE [dbo].[MailboxStatisticsStaging](
     [TotalItemSize] [NVARCHAR](256) NULL,
     TotalItemSizeInBytes [INT64] NULL,
     TotalDeletedItemSizeInBytes [INT64] NULL,
-    TotalItemSizeInGB [INT64] NULL,
-    TotalDeletedItemSizeGB [INT64] NULL,
+    TotalItemSizeInGB [decimal](6,2) NULL,
+    TotalDeletedItemSizeGB [decimal](6,2) NULL,
 );

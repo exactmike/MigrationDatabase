@@ -212,7 +212,7 @@ $bulkCopy.Dispose()
 ##########################################################################################################
 #Initial Database Configuration
 ##########################################################################################################
-function Initialize-Database
+function Initialize-MigrationDatabase
 {
 [cmdletbinding()]
 param
@@ -376,8 +376,8 @@ $SVAttributes = @('AssociatedItemCount','Database','DatabaseName','DeletedItemCo
 $propertyset = Get-CSVExportPropertySet -Delimiter '|' -ScalarAttributes $SVAttributes 
 $PropertySet += @{n='TotalItemSizeInBytes';e={$_.TotalItemSize.ToString().split(('(',')'))[1].replace(',','').replace(' bytes','') -as [long]}}
 $PropertySet += @{n='TotalDeletedItemSizeInBytes';e={$_.TotalItemSize.ToString().split(('(',')'))[1].replace(',','').replace(' bytes','') -as [long]}}
-$PropertySet += @{n='TotalItemSizeInGB';e={[math]::Round(($_.TotalItemSize.ToString().split(('(',')'))[1].replace(',','').replace(' bytes','') -as [long])/1GB)}}
-$PropertySet += @{n='TotalDeletedItemSizeGB';e={[math]::Round(($_.TotalItemSize.ToString().split(('(',')'))[1].replace(',','').replace(' bytes','') -as [long])/1GB)}}
+$PropertySet += @{n='TotalItemSizeInGB';e={[math]::Round(($_.TotalItemSize.ToString().split(('(',')'))[1].replace(',','').replace(' bytes','') -as [single])/1GB,3)}}
+$PropertySet += @{n='TotalDeletedItemSizeGB';e={[math]::Round(($_.TotalItemSize.ToString().split(('(',')'))[1].replace(',','').replace(' bytes','') -as [single])/1GB,3)}}
 $propertyset += @{n='Identity';e={$_.Identity.guid}}
 $propertyset += @{n='MailboxGuid';e={$_.MailboxGuid.guid}}
 $propertyset += @{n='SourceOrganization';e={$ExchangeOrganization}}
