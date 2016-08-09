@@ -294,11 +294,11 @@ param
 [parameter(Mandatory)]
 $SourceAD
 ,
-$Filter
-,
+#$Filter
+#,
 $Properties = $(Get-OneShellVariableValue -Name ADUserAttributes)
-,
-$PropertySet
+#,
+#$PropertySet
 )
 #Get Data from Active Directory
 Push-Location
@@ -323,10 +323,10 @@ param
 (
 [parameter(Mandatory)]
 $ExchangeOrganization
-,
-$Filter
-,
-$PropertySet
+#,
+#$Filter
+#,
+#$PropertySet
 )
 Connect-Exchange -ExchangeOrganization $ExchangeOrganization
 $Splat = @{
@@ -341,6 +341,45 @@ $propertyset += @{n='ArchiveGuid';e={$_.ArchiveGuid.guid}}
 $propertyset += @{n='SourceOrganization';e={$ExchangeOrganization}}
 $ExchangeRecipientsExport = @($RawRecipients | Select-Object -Property $propertyset) #-ErrorAction SilentlyContinue
 Write-Output $ExchangeRecipientsExport
+}
+function Export-MailboxStatistics
+{
+[cmdletbinding()]
+param
+(
+[parameter(Mandatory)]
+$ExchangeOrganization
+#,
+#$Filter
+#,
+#$PropertySet
+)
+Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
+$GetMailboxDatabaseSplat = @{
+    Status = $true
+    ErrorAction = 'Stop'
+}
+$MailboxDatabases = Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-MailboxDatabase' -splat $GetMailboxDatabaseSplat
+$MountedMailboxDatabases = $MailboxDatabases | Where-Object -FilterScript {$_.Mounted -eq $true}
+$RawMailboxStatistics = @(
+    foreach ($mmd in $MountedMailboxDatabases)
+    {
+        $GetMailboxStatisticsSplat = @{Database = $mmd.name}
+        Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-MailboxStatistics' -splat $GetMailboxStatisticsSplat
+    }
+)
+# $MVAttributes = @() # None needed for this data
+$SVAttributes = @('AssociatedItemCount','Database','DatabaseName','DeletedItemCount','DisconnectDate','DisconnectReason','DisplayName','IsArchiveMailbox','IsQuarantined','IsValid','ItemCount','LastLoggedOnUserAccount','LastLogoffTime','LastLogonTime','LegacyDN','MailboxGuid','MailboxTableIdentifier','MapiIdentity','ObjectClass','ServerName','StorageLimitStatus','TotalItemSize','TotalDeletedItemSize')
+$propertyset = Get-CSVExportPropertySet -Delimiter '|' -ScalarAttributes $SVAttributes 
+$PropertySet += @{n='TotalItemSizeInBytes';e={$_.TotalItemSize.ToString().split(('(',')'))[1].replace(',','').replace(' bytes','') -as [long]}}
+$PropertySet += @{n='TotalDeletedItemSizeInBytes';e={$_.TotalItemSize.ToString().split(('(',')'))[1].replace(',','').replace(' bytes','') -as [long]}}
+$PropertySet += @{n='TotalItemSizeInGB';e={[math]::Round(($_.TotalItemSize.ToString().split(('(',')'))[1].replace(',','').replace(' bytes','') -as [long])/1GB)}}
+$PropertySet += @{n='TotalDeletedItemSizeGB';e={[math]::Round(($_.TotalItemSize.ToString().split(('(',')'))[1].replace(',','').replace(' bytes','') -as [long])/1GB)}}
+$propertyset += @{n='Identity';e={$_.Identity.guid}}
+$propertyset += @{n='MailboxGuid';e={$_.MailboxGuid.guid}}
+$propertyset += @{n='SourceOrganization';e={$ExchangeOrganization}}
+$MailboxStatisticsExport = @($RawMailboxStatistics | Select-Object -Property $propertyset -ExcludeProperty Identity,MailboxGuid) #-ErrorAction SilentlyContinue
+Write-Output $MailboxStatisticsExport
 }
 ##########################################################################################################
 #OneShell Data Access Functions

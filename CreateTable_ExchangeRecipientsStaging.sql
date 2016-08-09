@@ -2,7 +2,7 @@ USE [MigrationPandT];
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 CREATE TABLE [dbo].[ExchangeRecipientsStaging](
-    SourceOrganization  [nvarchar](MAX) NULL,
+    SourceOrganization  [nvarchar](36) NULL,
     ActiveSyncMailboxPolicy [nvarchar](MAX) NULL,
     ActiveSyncMailboxPolicyIsDefaulted [nvarchar](MAX) NULL,
     AddressBookPolicy [nvarchar](MAX) NULL,
