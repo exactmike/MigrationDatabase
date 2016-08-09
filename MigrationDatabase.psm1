@@ -223,8 +223,10 @@ param
 )
 $SQLServerConnection = New-SQLServerConnection -server $ComputerName
 #Add code to check for DB existence: select name from sys.databases
-$checkDBs = 'SELECT name FROM sys.databases'
-$ExistingDatabases = Invoke-SQLServerQuery -sql $checkDBs -connection $SQLServerConnection | Select-object -ExpandProperty Name
+$ExistingDatabasesQuery = 'SELECT name FROM sys.databases'
+$ExistingDatabases = Invoke-SQLServerQuery -sql $ExistingDatabasesQuery -connection $SQLServerConnection | Select-Object -ExpandProperty Name
+$ExistingDatabasesJoin = $ExistingDatabases -join ';'
+Write-Log -Message "Existing Databases on Server $Computername are: $ExistingDatabasesJoin" -EntryType Notification
 if ($Database -notin $ExistingDatabases)
 {
     #Create DB
@@ -235,8 +237,9 @@ if ($Database -notin $ExistingDatabases)
 $SQLServerConnection.Close()
 $SQLServerConnection = New-SQLServerConnection -server $ComputerName -database $Database
 #CreateTables
-$CreateTableQueries = get-childitem -Path $PSScriptRoot -Filter "CreateTable*.sql"
-$ExistingTables = 'SELECT name FROM sys.Tables'
+$CreateTableQueries = get-childitem -Path $PSScriptRoot -Filter "CreateTable_*.sql"
+$ExistingTablesQuery = 'SELECT name FROM sys.Tables'
+$ExistingTables = Invoke-SQLServerQuery -sql $ExistingTablesQuery -connection $SQLServerConnection | Select-Object -ExpandProperty Name
 $ExistingTablesJoin = $ExistingTables -join ';'
 Write-Log -Message "Existing Tables in Database $Database are: $ExistingTablesJoin" -EntryType Notification
 foreach ($query in $CreateTableQueries)
