@@ -296,7 +296,7 @@ $SourceAD
 ,
 $Filter
 ,
-$Properties = $(Get-OneShellVariableValue -Name AllADAttributesToRetrieve)
+$Properties = $(Get-OneShellVariableValue -Name ADUserAttributes)
 ,
 $PropertySet
 )
