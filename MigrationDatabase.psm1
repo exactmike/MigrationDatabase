@@ -375,9 +375,9 @@ $RawMailboxStatistics = @(
 $SVAttributes = @('AssociatedItemCount','Database','DatabaseName','DeletedItemCount','DisconnectDate','DisconnectReason','DisplayName','IsArchiveMailbox','IsQuarantined','IsValid','ItemCount','LastLoggedOnUserAccount','LastLogoffTime','LastLogonTime','LegacyDN','MailboxGuid','MailboxTableIdentifier','MapiIdentity','ObjectClass','ServerName','StorageLimitStatus','TotalItemSize','TotalDeletedItemSize')
 $propertyset = Get-CSVExportPropertySet -Delimiter '|' -ScalarAttributes $SVAttributes 
 $PropertySet += @{n='TotalItemSizeInBytes';e={$_.TotalItemSize.ToString().split(('(',')'))[1].replace(',','').replace(' bytes','') -as [long]}}
-$PropertySet += @{n='TotalDeletedItemSizeInBytes';e={$_.TotalItemSize.ToString().split(('(',')'))[1].replace(',','').replace(' bytes','') -as [long]}}
+$PropertySet += @{n='TotalDeletedItemSizeInBytes';e={$_.TotalDeletedItemSize.ToString().split(('(',')'))[1].replace(',','').replace(' bytes','') -as [long]}}
 $PropertySet += @{n='TotalItemSizeInGB';e={[math]::Round(($_.TotalItemSize.ToString().split(('(',')'))[1].replace(',','').replace(' bytes','') -as [single])/1GB,3)}}
-$PropertySet += @{n='TotalDeletedItemSizeGB';e={[math]::Round(($_.TotalItemSize.ToString().split(('(',')'))[1].replace(',','').replace(' bytes','') -as [single])/1GB,3)}}
+$PropertySet += @{n='TotalDeletedItemSizeInGB';e={[math]::Round(($_.TotalDeletedItemSize.ToString().split(('(',')'))[1].replace(',','').replace(' bytes','') -as [single])/1GB,3)}}
 $propertyset += @{n='Identity';e={$_.Identity.guid}}
 $propertyset += @{n='MailboxGuid';e={$_.MailboxGuid.guid}}
 $propertyset += @{n='SourceOrganization';e={$ExchangeOrganization}}

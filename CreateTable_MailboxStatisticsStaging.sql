@@ -30,5 +30,5 @@ CREATE TABLE [dbo].[MailboxStatisticsStaging](
     TotalItemSizeInBytes [BIGINT] NULL,
     TotalDeletedItemSizeInBytes [BIGINT] NULL,
     TotalItemSizeInGB [decimal](6,2) NULL,
-    TotalDeletedItemSizeGB [decimal](6,2) NULL,
+    TotalDeletedItemSizeInGB [decimal](6,2) NULL,
 );
