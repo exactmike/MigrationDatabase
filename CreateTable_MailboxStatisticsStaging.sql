@@ -19,7 +19,7 @@ CREATE TABLE [dbo].[MailboxStatisticsStaging](
     [LastLogoffTime] [DateTime] NULL,
     [LastLogonTime] [DateTime] NULL,
     [LegacyDN] [NVARCHAR](256) NULL,
-    [MailboxGuid] [System.Guid](36) NULL,
+    [MailboxGuid] [NVARCHAR](36) NULL,
     [MailboxTableIdentifier] [NVARCHAR](36) NULL,
     [MapiIdentity] [NVARCHAR](36) NULL,
     [ObjectClass] [NVARCHAR](256) NULL,
