@@ -30,7 +30,7 @@ if ($types -contains $type)
 } else {
     Write-Output 'System.String' 
 } 
-}#Function Get-Type
+}#Function Get-DataTableType
 function Convert-PSObjectToDataTable 
 { 
 <# 
@@ -109,7 +109,7 @@ http://thepowershellguy.com/blogs/posh/archive/2007/01/21/powershell-gui-scripbl
         Write-Output @(,($dt)) 
     } 
  
-} #Out-DataTable
+}#Convert-PSObjectToDataTable
 function Import-DataTableToSQLBulkCopy
 {
 [cmdletbinding(SupportsShouldProcess,ConfirmImpact = 'High')]
@@ -208,7 +208,7 @@ $bulkCopy.BatchSize = $null
 $bulkCopy.ColumnMappings.Clear()
 $bulkCopy.Close()
 $bulkCopy.Dispose()
-}
+}#Import-DataTableToSQLBulkCopy
 ##########################################################################################################
 #Initial Database Configuration
 ##########################################################################################################
@@ -264,7 +264,7 @@ foreach ($query in $CreateTableQueries)
     }
     
 }
-}#Function Initialize-SQLDatabase
+}#Function Initialize-MigrationDatabase
 ##########################################################################################################
 #Export From Source Systems Functions
 ##########################################################################################################
@@ -383,6 +383,22 @@ $propertyset += @{n='MailboxGuid';e={$_.MailboxGuid.guid}}
 $propertyset += @{n='SourceOrganization';e={$ExchangeOrganization}}
 $MailboxStatisticsExport = @($RawMailboxStatistics | Select-Object -Property $propertyset -ExcludeProperty Identity,MailboxGuid) #-ErrorAction SilentlyContinue
 Write-Output $MailboxStatisticsExport
+}
+function Import-OBCScriptOutputFromCSV
+{
+[cmdletbinding()]
+param(
+[parameter(Mandatory)]
+$Path
+)
+$files = @(Get-ChildItem -Path $Path -Filter OBC-*.csv)
+$obcOutputs = @{}
+foreach ($file in $files)
+{
+    $importedname = $file.BaseName.replace('-','')
+    $obcOutputs.$importedname = Import-Csv -Path $file.FullName
+}
+Write-Output $obcOutputs
 }
 ##########################################################################################################
 #OneShell Data Access Functions

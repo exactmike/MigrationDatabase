@@ -7,3 +7,9 @@ Import-DataTableToSQLBulkCopy -SQLTable 'ADUsersStaging' -DataTable $ADUsersData
 $ExchangeRecipients = Export-ExchangeRecipient -ExchangeOrganization OP 
 $ExchangeRecipientsDataTable = Convert-PSObjectToDataTable -InputObject $ExchangeRecipients
 Import-DataTableToSQLBulkCopy -SQLTable 'ExchangeRecipientsStaging' -DataTable $ExchangeRecipientsDataTable -sqlConnectionName 'MPT' -ValidateColumnMappings -TruncateSQLTable
+$OBCOutputs = Import-OBCScriptOutputFromCSV -Path 
+$OBCPermissionsDataTable = Convert-PSObjectToDataTable -InputObject $OBCOutputs.OBCPermissionsOutput
+Import-DataTableToSQLBulkCopy -SQLTable 'OBCPermissionsStaging' -DataTable $OBCPermissionsDataTable -SQLConnectionName 'MPT' -ValidateColumnMappings -TruncateSQLTable
+$OBCOutputs = Import-OBCScriptOutputFromCSV -Path 
+$OBCBatchesDataTable = Convert-PSObjectToDataTable -InputObject $OBCOutputs.OBCBatchesOutput
+Import-DataTableToSQLBulkCopy -SQLTable 'OBCPermissionsStaging' -DataTable $OBCBatchesDataTable -SQLConnectionName 'MPT' -ValidateColumnMappings -TruncateSQLTable
