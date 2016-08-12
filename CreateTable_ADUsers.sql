@@ -9,6 +9,7 @@ CREATE TABLE [dbo].[ADUsers](
 	[CanonicalName] [nvarchar](256) NULL,
 	[cn] [nvarchar](256) NULL,
 	[co] [nvarchar](256) NULL,
+    [company] [nvarchar](64) NULL,
 	[country] [nvarchar](256) NULL,
 	[deliverandRedirect] [nvarchar](5) NULL,
 	[department] [nvarchar](64) NULL,
