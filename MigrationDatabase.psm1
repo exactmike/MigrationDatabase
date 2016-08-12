@@ -31,8 +31,8 @@ if ($types -contains $type)
     Write-Output 'System.String' 
 } 
 }#Function Get-DataTableType
-function Convert-PSObjectToDataTable 
-{ 
+function Convert-PSObjectToDataTable
+{
 <# 
 .SYNOPSIS 
 Creates a DataTable for an object 
@@ -59,56 +59,61 @@ v1.6  - Chad Miller - Added column datatype logic with default to string
 v1.7 - Chad Miller - Fixed issue with IsArray 
 .LINK 
 http://thepowershellguy.com/blogs/posh/archive/2007/01/21/powershell-gui-scripblock-monitor-script.aspx 
-#> 
-    [CmdletBinding()] 
-    param([Parameter(Position=0, Mandatory=$true, ValueFromPipeline = $true)] [PSObject[]]$InputObject) 
- 
-    Begin 
-    { 
-        $dt = new-object Data.datatable   
-        $First = $true  
-    } 
-    Process 
-    { 
-        foreach ($object in $InputObject) 
-        { 
-            $DR = $DT.NewRow()   
-            foreach($property in $object.PsObject.get_properties()) 
-            {   
-                if ($first) 
-                {   
-                    $Col =  new-object Data.DataColumn   
-                    $Col.ColumnName = $property.Name.ToString()   
-                    if ($property.value) 
-                    { 
-                        if ($property.value -isnot [System.DBNull]) { 
-                            $Col.DataType = [System.Type]::GetType("$(Get-DataTableType $property.TypeNameOfValue)") 
-                         } 
-                    } 
-                    $DT.Columns.Add($Col) 
-                }   
-                if ($property.Gettype().IsArray) { 
-                    $DR.Item($property.Name) =$property.value | ConvertTo-XML -AS String -NoTypeInformation -Depth 1 
-                }   
-               else { 
-                    if ($property.value) {
-                        $DR.Item($property.Name) = $property.value 
-                    } 
-                    else {
-                        $DR.Item($property.Name) = [DBNull]::Value
+#>
+[CmdletBinding()]
+param
+(
+[Parameter(Position=0, Mandatory=$true, ValueFromPipeline = $true)]
+[PSObject[]]$InputObject
+) 
+Begin 
+{ 
+    $dt = new-object Data.datatable   
+    $First = $true  
+} 
+Process
+{
+    foreach ($object in $InputObject)
+    {
+        $DR = $DT.NewRow()
+        foreach($property in $object.PsObject.get_properties())
+        {
+            if ($first)
+            {
+                    $Col =  new-object Data.DataColumn
+                    $Col.ColumnName = $property.Name.ToString()
+                    if ($property.value)
+                    {
+                        if ($property.value -isnot [System.DBNull]) {
+                            $Col.DataType = [System.Type]::GetType("$(Get-DataTableType $property.TypeNameOfValue)")
+                         }
                     }
-                } 
-            }   
-            $DT.Rows.Add($DR)   
-            $First = $false 
-        } 
-    }  
-      
-    End 
-    { 
-        Write-Output @(,($dt)) 
-    } 
- 
+                    $DT.Columns.Add($Col)
+            }
+            if ($property.Gettype().IsArray) 
+            {
+                    $DR.Item($property.Name) =$property.value | ConvertTo-XML -AS String -NoTypeInformation -Depth 1
+            }
+            else
+            {
+                if ($property.value)
+                {
+                    $DR.Item($property.Name) = $property.value
+                }
+                else
+                {
+                    $DR.Item($property.Name) = [DBNull]::Value
+                }
+            }
+        }
+        $DT.Rows.Add($DR)
+        $First = $false
+    }
+}
+End 
+{ 
+    Write-Output @(,($dt)) 
+}  
 }#Convert-PSObjectToDataTable
 function Import-DataTableToSQLBulkCopy
 {
@@ -303,6 +308,7 @@ $Properties = $(Get-OneShellVariableValue -Name ADUserAttributes)
 #,
 #$PropertySet
 )
+Connect-ADInstance -ActiveDirectoryInstance $SourceAD > $null
 #Get Data from Active Directory
 Push-Location
 Set-Location "$($SourceAD):\"
@@ -331,7 +337,7 @@ $ExchangeOrganization
 #,
 #$PropertySet
 )
-Connect-Exchange -ExchangeOrganization $ExchangeOrganization
+Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
 $Splat = @{
     ResultSize = 'Unlimited'
 }
