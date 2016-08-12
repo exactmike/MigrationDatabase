@@ -7,6 +7,7 @@ CREATE TABLE [dbo].[ADUsers](
 	[altRecipient] [nvarchar](256) NULL,
 	[c] [nchar](2) NULL,
 	[CanonicalName] [nvarchar](256) NULL,
+	[city] [nvarchar](64) NULL,
 	[cn] [nvarchar](256) NULL,
 	[co] [nvarchar](256) NULL,
     [company] [nvarchar](64) NULL,
@@ -71,21 +72,31 @@ CREATE TABLE [dbo].[ADUsers](
  CONSTRAINT [PK_ADUsers] PRIMARY KEY NONCLUSTERED 
 (
 	[ObjectGUID] ASC
-)
-;WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]
-) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY];
+));
+
 CREATE UNIQUE CLUSTERED INDEX [CIX_ADUsers] ON [dbo].[ADUsers]
 (
 	[ID] ASC
-)
-;WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, IGNORE_DUP_KEY = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON);
-CREATE NONCLUSTERED INDEX [NCI_SourceMailUPN] ON [dbo].[ADUsers]
+);
+
+CREATE NONCLUSTERED INDEX [NCI_Mail] ON [dbo].[ADUsers]
 (
-	[Mail] ASC,
-	[SourceOrganization] ASC,
-	[userPrincipalName] ASC
+	[Mail] ASC
 )
-INCLUDE ( 	[proxyAddresses],
-	[sAMAccountName],
-	[targetAddress]) 
-;WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON);
+INCLUDE ( 	
+	[SamAccountName],
+	[targetAddress],
+	[SourceOrganization],
+	[userPrincipalName]
+) ;
+CREATE NONCLUSTERED INDEX [NCI_SourceOrganization] ON [dbo].[ADUsers]
+(
+	[SourceOrganization] ASC
+)
+INCLUDE (
+	[Mail],
+	[SamAccountName],
+	[targetAddress],
+	[userPrincipalName]
+) ;
+
