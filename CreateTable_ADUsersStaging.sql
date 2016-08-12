@@ -60,7 +60,7 @@ CREATE TABLE [dbo].[ADUsersStaging](
     msExchUsageLocation [nvarchar](MAX) NULL,
     msExchUserCulture [nvarchar](MAX) NULL,
     msExchVersion [nvarchar](MAX) NULL,
-    msRTCSIP-UserEnabled [nvarchar](MAX) NULL,
+    [msRTCSIP-UserEnabled] [nvarchar](MAX) NULL,
     ObjectGUID [nvarchar](MAX) NULL,
     physicalDeliveryOfficeName [nvarchar](MAX) NULL,
     proxyAddresses [nvarchar](MAX) NULL,
