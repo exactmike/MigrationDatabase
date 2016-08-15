@@ -222,7 +222,7 @@ param(
 $TargetMailbox
 ,
 [parameter(Mandatory)]
-[string]$PermissionHolderIdentity
+[string]$TrusteeIdentity
 ,
 [parameter(Mandatory)]
 [ValidateSet('FullAccess','SendOnBehalf','SendAs','None')]
@@ -232,19 +232,60 @@ $PermissionType
 [ValidateSet('Direct','GroupMembership','None')]
 [string]$AssignmentType = 'Direct'
 ,
-$PermissionGroupObjectGUID
+$TrusteeGroupObjectGUID
+,
+[string]$SourceExchangeOrganization = $ExchangeOrganization
 )
 [pscustomobject]@{
+    SourceExchangeOrganization = $SourceExchangeOrganization
     TargetObjectGUID = $TargetMailbox.Guid.Guid
     TargetDistinguishedName = $TargetMailbox.DistinguishedName
     TargetPrimarySMTPAddress = $TargetMailbox.PrimarySmtpAddress.ToString()
     TargetRecipientType = $TargetMailbox.RecipientType
     TargetRecipientTypeDetails = $TargetMailbox.RecipientTypeDetails
     PermissionType = $PermissionType
-    PermissionAssignmentType = $AssignmentType
-    PermissionGroupObjectGUID = $PermissionGroupObjectGUID
-    PermissionHolderIdentity = $PermissionHolderIdentity
+    AssignmentType = $AssignmentType
+    TrusteeGroupObjectGUID = $TrusteeGroupObjectGUID
+    TrusteeIdentity = $TrusteeIdentity
 }
+}
+function Add-TrusteeAttributesToPermissionExportObject
+{
+[cmdletbinding()]
+param
+(
+[parameter(Mandatory)]
+[Alias('rpeo')]
+$rawPermissionExportObject
+,
+[parameter(Mandatory)]
+[Alias('Recipient','Mailbox')]
+[AllowNull()]
+$TrusteeRecipientObject
+,
+[switch]$None
+)
+if ($TrusteeRecipientObject -ne $null)
+{
+    $MorePermissionExportProperties = @{
+        TrusteeObjectGUID = $TrusteeRecipientObject.guid.Guid
+        TrusteeDistinguishedName = $TrusteeRecipientObject.DistinguishedName
+        TrusteePrimarySMTPAddress = $TrusteeRecipientObject.PrimarySmtpAddress.ToString()
+        TrusteeRecipientType = $TrusteeRecipientObject.RecipientType
+        TrusteeRecipientTypeDetails = $TrusteeRecipientObject.RecipientTypeDetails
+    }
+}
+else
+{
+    $MorePermissionExportProperties = @{
+        TrusteeObjectGUID = $null
+        TrusteeDistinguishedName = if ($None) {'none'} else {$null}
+        TrusteePrimarySMTPAddress = if ($None) {'none'} else {$null}
+        TrusteeRecipientType = $null
+        TrusteeRecipientTypeDetails = $null
+    }
+}
+Add-Member -InputObject $rawPermissionExportObject -NotePropertyMembers $MorePermissionExportProperties
 }
 ##########################################################################################################
 #Initial Database Configuration
@@ -437,7 +478,7 @@ param(
     [string[]]$Identity
     ,
     [Parameter(ParameterSetName = 'AllMailboxes',Mandatory)]
-    [boolean]$AllMailboxes = $true
+    [switch]$AllMailboxes
     ,
     [parameter()]
     [string[]]$ExcludedIdentities
@@ -461,7 +502,7 @@ switch ($PSCmdlet.ParameterSetName)
         Write-Log -Message "Operation: Scoped Permission retrieval with $($Identity.Count) Identities provided." -Verbose
         $message = "Retrieve mailbox object for each provided Identity in Exchange Organization $ExchangeOrganization."
         Write-Log -Message $message -EntryType Attempting -Verbose
-        $Set = @($Identity | % {
+        $InScopeMailboxes = @($Identity | % {
                 $splat = @{Identity = $_}
                 Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-Mailbox' -splat $splat
             }
@@ -474,14 +515,14 @@ switch ($PSCmdlet.ParameterSetName)
         $message = "Retrieve all available mailbox objects in Exchange Organization $ExchangeOrganization."
         Write-Log -Message $message -EntryType Attempting -Verbose
         $splat = @{ResultSize = 'Unlimited'}
-        $Set = @(Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-Mailbox' -splat $splat)
+        $InScopeMailboxes = @(Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-Mailbox' -splat $splat)
         Write-Log -Message $message -EntryType Succeeded -Verbose
     }
 }
 #EndRegion GetInScopeMailboxes
 if ($PSBoundParameters.ContainsKey('ExcludedIdentities'))
 {
-    $excludedPermissionHolders = @(
+    $excludedRecipients = @(
         $ExcludedIdentities | ForEach-Object {
             $splat = @{
                 Identity = $_
@@ -490,53 +531,49 @@ if ($PSBoundParameters.ContainsKey('ExcludedIdentities'))
             Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-Recipient' -splat $splat
         }
     )
-    $excludedPermissionHoldersGUIDHash = $excludedPermissionHolders | Group-Object -Property GUID -AsString -AsHashTable
+    $excludedRecipientsGUIDHash = $excludedRecipients | Group-Object -Property GUID -AsString -AsHashTable
 }
 #ADSI Adapter: http://social.technet.microsoft.com/wiki/contents/articles/4231.working-with-active-directory-using-powershell-adsi-adapter.aspx
 $dse = [ADSI]"LDAP://Rootdse"
 $ext = [ADSI]("LDAP://CN=Extended-Rights," + $dse.ConfigurationNamingContext)
 $dn = [ADSI]"LDAP://$($dse.DefaultNamingContext)"
-$dsLookFor = new-object System.DirectoryServices.DirectorySearcher($dn)
+$dsLookFor = New-Object System.DirectoryServices.DirectorySearcher($dn)
 $permission = "Send As"
 $right = $ext.psbase.Children | ? { $_.DisplayName -eq $permission }
 $CanonicalNameHash = @{}
 $DomainPrincipalHash = @{}
-$DistinguishedNameHash = $Set | Group-Object -AsHashTable -Property DistinguishedName -AsString
+$DistinguishedNameHash = $InScopeMailboxes | Group-Object -AsHashTable -Property DistinguishedName -AsString
 $MissingOrAmbiguousRecipients = @()
 $mailboxCounter = 0
-$setSize = $set.count
-Foreach ($mailbox in $Set)
+$InScopeMailboxCount = $InScopeMailboxes.count
+Foreach ($mailbox in $InScopeMailboxes)
 {
+    $mailboxCounter++
     if ($PSBoundParameters.ContainsKey('ExcludedIdentities'))
     {
-        if ($excludedPermissionHoldersGUIDHash.ContainsKey($mailbox.guid.Guid))
+        if ($excludedRecipientsGUIDHash.ContainsKey($mailbox.guid.Guid))
         {
             continue
         }
     }
-    #GatherPermissions
-	#Progress Activity
-    if($setSize -gt 0){
-        $mailboxCounter++
-        Write-Progress -Activity "Retrieving Permissions" -status "Items processed: $($mailboxCounter) of $($setSize)" -percentComplete (($mailboxCounter / $setSize)*100)
-    }
     $ID = $mailbox.PrimarySMTPAddress.ToString();
     $message = "Collect permissions for $($ID)"
+    Write-Progress -Activity $message -status "Items processed: $($mailboxCounter) of $($InScopeMailboxCount)" -percentComplete (($mailboxCounter / $InScopeMailboxCount)*100)
 	Write-Log -Message $message -EntryType Attempting -Verbose
     $rawPermissions = @(
         #Get Delegate Users (actual permissions are stored in the mailbox . . . so these are not true delegates just a likely correlation to delegates) This section should also check if the grantsendonbehalfto permission holder is a group, because it can be . . .
         If ($IncludeSendOnBehalf)
         {
-            $sbPermissionHolders = $mailbox.grantsendonbehalfto.ToArray()
-            foreach ($sb in $sbPermissionHolders)
+            $sbTrustees = $mailbox.grantsendonbehalfto.ToArray()
+            foreach ($sb in $sbTrustees)
             {
-                New-PermissionExportObject -TargetMailbox $mailbox -PermissionHolderIdentity $sb -PermissionType SendOnBehalf -AssignmentType Direct
+                New-PermissionExportObject -TargetMailbox $mailbox -TrusteeIdentity $sb -PermissionType SendOnBehalf -AssignmentType Direct -SourceExchangeOrganization $ExchangeOrganization
             }
         }
         #Get Full Access Users
         If ($IncludeFullAccess)
         {
-            $faPermissionHolders = @(
+            $faTrustees = @(
                 $splat = @{Identity = $ID; ErrorAction = 'SilentlyContinue'}
                 Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-MailboxPermission' -splat $splat |
                 Where-Object -FilterScript {
@@ -546,22 +583,22 @@ Foreach ($mailbox in $Set)
                     ($_.User -like "S-1-5*")
                 } | Select-Object -ExpandProperty User
             )
-            foreach ($fa in $faPermissionHolders)
+            foreach ($fa in $faTrustees)
             {
-                New-PermissionExportObject -TargetMailbox $mailbox -PermissionHolderIdentity $fa -PermissionType FullAccess -AssignmentType Direct
+                New-PermissionExportObject -TargetMailbox $mailbox -TrusteeIdentity $fa -PermissionType FullAccess -AssignmentType Direct -SourceExchangeOrganization $ExchangeOrganization
             }
         }
         #Get Send As Users
         If ($IncludeSendAs)
         {
             $userDN = [ADSI]("LDAP://$($mailbox.DistinguishedName)")
-            $saPermissionHolders = @(
-                $userDN.psbase.ObjectSecurity.Access | Where-Object -FilterScript { $_.ObjectType -eq [GUID]$right.RightsGuid.Value } | 
+            $saTrustees = @(
+                $userDN.psbase.ObjectSecurity.Access | Where-Object -FilterScript { $_.ObjectType -eq [GUID]$right.RightsGuid.Value} | 
                 Select-Object -ExpandProperty identityreference | Where-Object -FilterScript {$_ -notlike "NT AUTHORITY\SELF"}
             )
-            foreach ($sa in $saPermissionHolders)
+            foreach ($sa in $saTrustees)
             {
-                New-PermissionExportObject -TargetMailbox $mailbox -PermissionHolderIdentity $sa -PermissionType SendAs -AssignmentType Direct
+                New-PermissionExportObject -TargetMailbox $mailbox -TrusteeIdentity $sa -PermissionType SendAs -AssignmentType Direct -SourceExchangeOrganization $ExchangeOrganization
             }
 		}
     )
@@ -573,22 +610,22 @@ Foreach ($mailbox in $Set)
         {
             'SendOnBehalf' #uses CanonicalName format!?!
             {
-                if ($CanonicalNameHash.ContainsKey($rp.PermissionHolderIdentity))
+                if ($CanonicalNameHash.ContainsKey($rp.TrusteeIdentity))
                 {
-                    $Recipient = @($CanonicalNameHash.$($rp.PermissionHolderIdentity))
+                    $Recipient = @($CanonicalNameHash.$($rp.TrusteeIdentity))
                 }
             }
             Default #both SendAs and FullAccess use Domain\SecurityPrincipal format
             {
-                if ($DomainPrincipalHash.ContainsKey($rp.PermissionHolderIdentity))
+                if ($DomainPrincipalHash.ContainsKey($rp.TrusteeIdentity))
                 {
-                    $Recipient = @($DomainPrincipalHash.$($rp.PermissionHolderIdentity))
+                    $Recipient = @($DomainPrincipalHash.$($rp.TrusteeIdentity))
                 }
             }
         }
         if ($Recipient.Count -eq 0)
         {
-            $splat = @{Identity = $rp.PermissionHolderIdentity; ErrorAction = 'SilentlyContinue'}
+            $splat = @{Identity = $rp.TrusteeIdentity; ErrorAction = 'SilentlyContinue'}
             $Recipient = @(Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-Recipient' -splat $splat)
         }
         switch ($Recipient.Count)
@@ -596,30 +633,16 @@ Foreach ($mailbox in $Set)
             1
             {
                 $Recipient = $Recipient[0]
-                $MorePermissionExportProperties = @{
-                    PermissionHolderObjectGUID = $Recipient.guid.Guid
-                    PermissionHolderDistinguishedName = $Recipient.DistinguishedName
-                    PermissionHolderPrimarySMTPAddress = $Recipient.PrimarySmtpAddress.ToString()
-                    PermissionHolderRecipientType = $Recipient.RecipientType
-                    PermissionHolderRecipientTypeDetails = $Recipient.RecipientTypeDetails
-                }
-                Add-Member -InputObject $rp -NotePropertyMembers $MorePermissionExportProperties
+                Add-TrusteeAttributesToPermissionExportObject -rawPermissionExportObject $rp -TrusteeRecipientObject $Recipient
                 switch ($rp.permissionType) {
-                    'SendOnBehalf' {$CanonicalNameHash.$($rp.PermissionHolderIdentity) = $Recipient}
-                    Default {$DomainPrincipalHash.$($rp.PermissionHolderIdentity) = $Recipient}
+                    'SendOnBehalf' {$CanonicalNameHash.$($rp.TrusteeIdentity) = $Recipient}
+                    Default {$DomainPrincipalHash.$($rp.TrusteeIdentity) = $Recipient}
                 }
             }#1
             Default
             {
-                $MissingOrAmbiguousRecipients += $rp.PermissionHolderIdentity
-                $MorePermissionExportProperties = @{
-                    PermissionHolderObjectGUID = $null
-                    PermissionHolderDistinguishedName = $null
-                    PermissionHolderPrimarySMTPAddress = $null
-                    PermissionHolderRecipientType = $null
-                    PermissionHolderRecipientTypeDetails = $null
-                }
-                Add-Member -InputObject $rp -NotePropertyMembers $MorePermissionExportProperties
+                $MissingOrAmbiguousRecipients += $rp.TrusteeIdentity
+                Add-TrusteeAttributesToPermissionExportObject -rawPermissionExportObject $rp -TrusteeRecipientObject $null
             }#Default
         }#switch Recipient.Count
     }#foreach Rp in RawPermissions
@@ -627,10 +650,10 @@ Foreach ($mailbox in $Set)
     {
         #enumerate groups: http://stackoverflow.com/questions/8055338/listing-users-in-ad-group-recursively-with-powershell-script-without-cmdlets/8055996#8055996
         $expandedPermissions = @(
-            $groupPerms = @($rawPermissions | Where-Object -FilterScript {$_.PermissionHolderRecipientTypeDetails -like '*Group*'})
+            $groupPerms = @($rawPermissions | Where-Object -FilterScript {$_.TrusteeRecipientTypeDetails -like '*Group*'})
             foreach ($gp in $groupPerms)
             {
-                $dsLookFor.Filter = "(&(memberof:1.2.840.113556.1.4.1941:=$($gp.PermissionHolderDistinguishedName))(objectCategory=user))" 
+                $dsLookFor.Filter = "(&(memberof:1.2.840.113556.1.4.1941:=$($gp.TrusteeDistinguishedName))(objectCategory=user))" 
                 $dsLookFor.SearchScope = "subtree" 
                 $lstUsr = $dsLookFor.findall()
                 foreach ($u in $lstUsr)
@@ -650,26 +673,30 @@ Foreach ($mailbox in $Set)
                             $Recipient = $Recipient[0]
                             $GPEOParams = @{
                                 TargetMailbox = $Mailbox
-                                PermissionHolderIdentity = $Recipient.DistinguishedName
+                                TrusteeIdentity = $Recipient.DistinguishedName
                                 PermissionType = $gp.PermissionType
                                 AssignmentType = 'GroupMembership'
-                                PermissionGroupObjectGUID = $gp.PermissionHolderObjectGUID 
+                                TrusteeGroupObjectGUID = $gp.TrusteeObjectGUID
+                                SourceExchangeOrganization = $ExchangeOrganization
                             }
                             $rawEP = New-PermissionExportObject @GPEOParams
-                            $MorePermissionExportProperties = @{
-                                PermissionHolderObjectGUID = $Recipient.guid.Guid
-                                PermissionHolderDistinguishedName = $Recipient.DistinguishedName
-                                PermissionHolderPrimarySMTPAddress = $Recipient.PrimarySmtpAddress.ToString()
-                                PermissionHolderRecipientType = $Recipient.RecipientType
-                                PermissionHolderRecipientTypeDetails = $Recipient.RecipientTypeDetails
-                            }
-                            Add-Member -InputObject $rawEP -NotePropertyMembers $MorePermissionExportProperties
+                            Add-TrusteeAttributesToPermissionExportObject -rawPermissionExportObject $rawEP -TrusteeRecipientObject $Recipient
                             Write-Output $rawEP
                             $DistinguishedNameHash.$uDN = $Recipient
                         }#1
                         Default
                         {
-                            $MissingOrAmbiguousRecipients += $rp.PermissionHolderIdentity
+                            $GPEOParams = @{
+                                TargetMailbox = $Mailbox
+                                TrusteeIdentity = "$uDN"
+                                PermissionType = $gp.PermissionType
+                                AssignmentType = 'GroupMembership'
+                                TrusteeGroupObjectGUID = $gp.TrusteeObjectGUID
+                                SourceExchangeOrganization = $ExchangeOrganization
+                            }
+                            $rawEP = New-PermissionExportObject @GPEOParams
+                            Add-TrusteeAttributesToPermissionExportObject -rawPermissionExportObject $rawEP -TrusteeRecipientObject $null
+                            $MissingOrAmbiguousRecipients += $rp.TrusteeIdentity
                         }#Default
                     }#switch Recipient.Count
                 }#foreach u in lstusr
@@ -677,21 +704,21 @@ Foreach ($mailbox in $Set)
         )#expandedPermissions
         if ($dropExpandedGroups)
         {
-            $rawPermissions = $rawPermissions | Where-Object -FilterScript {$_.PermissionHolderRecipientTypeDetails -notlike '*group*'}
+            $rawPermissions = $rawPermissions | Where-Object -FilterScript {$_.TrusteeRecipientTypeDetails -notlike '*group*'}
         }
     }
     #combine and remove and self permissions that came in through expansion or otherwise
     if ($expandedPermissions.Count -ge 1)
-    {$AllPermissionsOutput = $expandedPermissions + $rawPermissions | Where-Object -FilterScript {$_.TargetObjectGUID -ne $_.PermissionHolderObjectGUID}}
+    {$AllPermissionsOutput = $expandedPermissions + $rawPermissions | Where-Object -FilterScript {$_.TargetObjectGUID -ne $_.TrusteeObjectGUID}}
     else
-    {$AllPermissionsOutput = $rawPermissions | Where-Object -FilterScript {$_.TargetObjectGUID -ne $_.PermissionHolderObjectGUID}}
+    {$AllPermissionsOutput = $rawPermissions | Where-Object -FilterScript {$_.TargetObjectGUID -ne $_.TrusteeObjectGUID}}
     #remove permissions from excludedPermissionHolders if needed
     if ($PSBoundParameters.ContainsKey('ExcludedIdentities'))
     {
         $AllPermissionsOutput = @(
             $AllPermissionsOutput | Where-Object -FilterScript {
-                ($_.permissionHolderObjectGUID -eq $null) -or
-                (-not $excludedPermissionHoldersGUIDHash.ContainsKey($_.PermissionHolderObjectGUID))
+                ($_.TrusteeObjectGUID -eq $null) -or
+                (-not $excludedRecipientsGUIDHash.ContainsKey($_.TrusteeObjectGUID))
             }
         )
     }
@@ -699,19 +726,13 @@ Foreach ($mailbox in $Set)
     {
         $GPEOParams = @{
             TargetMailbox = $mailbox
-            PermissionHolderIdentity = 'Not Applicable'
+            TrusteeIdentity = 'Not Applicable'
             PermissionType = 'None'
             AssignmentType = 'None'
+            SourceExchangeOrganization = $ExchangeOrganization
         }
         $NonPerm = New-PermissionExportObject @GPEOParams
-        $MorePermissionExportProperties = @{
-            PermissionHolderObjectGUID = $null
-            PermissionHolderDistinguishedName = $null
-            PermissionHolderPrimarySMTPAddress = 'None'
-            PermissionHolderRecipientType = $null
-            PermissionHolderRecipientTypeDetails = $null
-        }
-        Add-Member -InputObject $NonPerm -NotePropertyMembers $MorePermissionExportProperties
+        Add-TrusteeAttributesToPermissionExportObject -rawPermissionExportObject $NonPerm -TrusteeRecipientObject $null -None
         Write-Output $NonPerm
     }
     else
