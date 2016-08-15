@@ -424,8 +424,11 @@ Write-Output $MailboxStatisticsExport
 }
 Function Export-Permissions
 {
-#Add an attribut to the permission object which indicates if the target/permholder were in the mailboxes scope
-#switch ExchangeOrganization to a default parameterhttp://regex.info/blog/2016-08-15/2722
+#ToDo
+#Add an attribute to the permission object which indicates if the target/permholder were in the mailboxes scope
+#switch ExchangeOrganization to a dynamic parameter
+#use get-group and/or get-user when get-recipient fails to get an object
+#move code to add additional attributes to export object to a new function or update the existin function
 [cmdletbinding(DefaultParameterSetName = 'AllMailboxes')]
 param(
     [string]$ExchangeOrganization
@@ -447,7 +450,7 @@ param(
     ,
     [boolean]$expandGroups = $true
     ,
-    [boolean]$dropExpandedGroups = $true
+    [boolean]$dropExpandedGroups = $false
 )
 Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
 #Region GetInScopeMailboxes
