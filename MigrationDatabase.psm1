@@ -214,6 +214,38 @@ $bulkCopy.ColumnMappings.Clear()
 $bulkCopy.Close()
 $bulkCopy.Dispose()
 }#Import-DataTableToSQLBulkCopy
+function New-PermissionExportObject
+{
+[cmdletbinding()]
+param(
+[parameter(Mandatory)]
+$TargetMailbox
+,
+[parameter(Mandatory)]
+[string]$PermissionHolderIdentity
+,
+[parameter(Mandatory)]
+[ValidateSet('FullAccess','SendOnBehalf','SendAs','None')]
+$PermissionType
+,
+[parameter()]
+[ValidateSet('Direct','GroupMembership','None')]
+[string]$AssignmentType = 'Direct'
+,
+$PermissionGroupObjectGUID
+)
+[pscustomobject]@{
+    TargetObjectGUID = $TargetMailbox.Guid.Guid
+    TargetDistinguishedName = $TargetMailbox.DistinguishedName
+    TargetPrimarySMTPAddress = $TargetMailbox.PrimarySmtpAddress.ToString()
+    TargetRecipientType = $TargetMailbox.RecipientType
+    TargetRecipientTypeDetails = $TargetMailbox.RecipientTypeDetails
+    PermissionType = $PermissionType
+    PermissionAssignmentType = $AssignmentType
+    PermissionGroupObjectGUID = $PermissionGroupObjectGUID
+    PermissionHolderIdentity = $PermissionHolderIdentity
+}
+}
 ##########################################################################################################
 #Initial Database Configuration
 ##########################################################################################################
@@ -315,7 +347,7 @@ Set-Location "$($SourceAD):\"
 $RawADUsers = Get-ADUser -LDAPFilter '(&((sAMAccountType=805306368))(!(userAccountControl:1.2.840.113556.1.4.803:=2)))' -Properties  $Properties | Select-Object -Property $Properties -ErrorAction SilentlyContinue
 Pop-Location
 $MVAttributes = @('msExchPoliciesExcluded','msexchextensioncustomattribute1','msexchextensioncustomattribute2','msexchextensioncustomattribute3','msexchextensioncustomattribute4','msexchextensioncustomattribute5','memberof','proxyAddresses')
-$SVAttributes = @('createTimeStamp','modifyTimeStamp','msExchWhenMailboxCreated','whenCreated','whenChanged','AccountExpirationDate','LastLogonDate','altRecipient','forwardingAddress','msExchGenericForwardingAddress','cn','userPrincipalName','sAMAccountName','CanonicalName','GivenName','SurName','DistinguishedName','displayName','employeeNumber','employeeID','enabled','Mail','mailNickname','homeMDB','homeMTA','msExchHomeServerName','legacyExchangeDN','msExchArchiveName','msExchMasterAccountSID','msExchUserCulture','targetAddress','msExchRecipientDisplayType','msExchRecipientTypeDetails','msExchRemoteRecipientType','msExchVersion','extensionattribute1','extensionattribute2','extensionattribute3','extensionattribute4','extensionattribute5','extensionattribute6','extensionattribute7','extensionattribute8','extensionattribute9','extensionattribute10','extensionattribute11','extensionattribute12','extensionattribute13','extensionattribute14','extensionattribute15','canonicalname','department','deliverandRedirect','distinguishedName','msExchHideFromAddressLists','msExchUsageLocation','c','co','country','physicalDeliveryOfficeName','company','city')
+$SVAttributes = @('createTimeStamp','modifyTimeStamp','msExchWhenMailboxCreated','whenCreated','whenChanged','AccountExpirationDate','LastLogonDate','altRecipient','forwardingAddress','msExchGenericForwardingAddress','cn','userPrincipalName','sAMAccountName','CanonicalName','GivenName','SurName','DistinguishedName','displayName','employeeNumber','employeeID','enabled','Mail','mailNickname','homeMDB','homeMTA','msExchHomeServerName','legacyExchangeDN','msExchArchiveName','msExchMasterAccountSID','msExchUserCulture','targetAddress','msExchRecipientDisplayType','msExchRecipientTypeDetails','msExchRemoteRecipientType','msExchVersion','extensionattribute1','extensionattribute2','extensionattribute3','extensionattribute4','extensionattribute5','extensionattribute6','extensionattribute7','extensionattribute8','extensionattribute9','extensionattribute10','extensionattribute11','extensionattribute12','extensionattribute13','extensionattribute14','extensionattribute15','canonicalname','department','deliverandRedirect','distinguishedName','msExchHideFromAddressLists','msExchUsageLocation','c','co','country','physicalDeliveryOfficeName','company','city','notes')
 $propertyset = Get-CSVExportPropertySet -Delimiter '|' -MultiValuedAttributes $MVAttributes -ScalarAttributes $SVAttributes 
 $propertyset += @{n='mS-DS-ConsistencyGuid';e={(Get-GuidFromByteArray -GuidByteArray $_.'mS-DS-ConsistencyGuid').guid}}
 $propertyset += @{n='msExchMailboxGUID';e={(Get-GuidFromByteArray -GuidByteArray $_.msExchMailboxGUID).guid}}
@@ -389,6 +421,308 @@ $propertyset += @{n='MailboxGuid';e={$_.MailboxGuid.guid}}
 $propertyset += @{n='SourceOrganization';e={$ExchangeOrganization}}
 $MailboxStatisticsExport = @($RawMailboxStatistics | Select-Object -Property $propertyset -ExcludeProperty Identity,MailboxGuid) #-ErrorAction SilentlyContinue
 Write-Output $MailboxStatisticsExport
+}
+Function Export-Permissions
+{
+#Add an attribut to the permission object which indicates if the target/permholder were in the mailboxes scope
+#switch ExchangeOrganization to a default parameterhttp://regex.info/blog/2016-08-15/2722
+[cmdletbinding(DefaultParameterSetName = 'AllMailboxes')]
+param(
+    [string]$ExchangeOrganization
+    ,
+    [parameter(ParameterSetName = 'Scoped',Mandatory)]
+    [string[]]$Identity
+    ,
+    [Parameter(ParameterSetName = 'AllMailboxes',Mandatory)]
+    [boolean]$AllMailboxes = $true
+    ,
+    [parameter()]
+    [string[]]$ExcludedIdentities
+    ,
+    [boolean]$IncludeSendOnBehalf = $true
+    ,
+    [boolean]$IncludeFullAccess = $true
+    ,
+    [boolean]$IncludeSendAs = $true
+    ,
+    [boolean]$expandGroups = $true
+    ,
+    [boolean]$dropExpandedGroups = $true
+)
+Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
+#Region GetInScopeMailboxes
+switch ($PSCmdlet.ParameterSetName)
+{
+    'Scoped'
+    { 
+        Write-Log -Message "Operation: Scoped Permission retrieval with $($Identity.Count) Identities provided." -Verbose
+        $message = "Retrieve mailbox object for each provided Identity in Exchange Organization $ExchangeOrganization."
+        Write-Log -Message $message -EntryType Attempting -Verbose
+        $Set = @($Identity | % {
+                $splat = @{Identity = $_}
+                Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-Mailbox' -splat $splat
+            }
+        )
+        Write-Log -Message $message -EntryType Succeeded -Verbose
+    }
+    'AllMailboxes'
+    {
+        Write-Log -Message "Operation: Permission retrieval for all mailboxes." -Verbose
+        $message = "Retrieve all available mailbox objects in Exchange Organization $ExchangeOrganization."
+        Write-Log -Message $message -EntryType Attempting -Verbose
+        $splat = @{ResultSize = 'Unlimited'}
+        $Set = @(Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-Mailbox' -splat $splat)
+        Write-Log -Message $message -EntryType Succeeded -Verbose
+    }
+}
+#EndRegion GetInScopeMailboxes
+if ($PSBoundParameters.ContainsKey('ExcludedIdentities'))
+{
+    $excludedPermissionHolders = @(
+        $ExcludedIdentities | ForEach-Object {
+            $splat = @{
+                Identity = $_
+                ErrorAction = 'SilentlyContinue'
+            }
+            Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-Recipient' -splat $splat
+        }
+    )
+    $excludedPermissionHoldersGUIDHash = $excludedPermissionHolders | Group-Object -Property GUID -AsString -AsHashTable
+}
+#ADSI Adapter: http://social.technet.microsoft.com/wiki/contents/articles/4231.working-with-active-directory-using-powershell-adsi-adapter.aspx
+$dse = [ADSI]"LDAP://Rootdse"
+$ext = [ADSI]("LDAP://CN=Extended-Rights," + $dse.ConfigurationNamingContext)
+$dn = [ADSI]"LDAP://$($dse.DefaultNamingContext)"
+$dsLookFor = new-object System.DirectoryServices.DirectorySearcher($dn)
+$permission = "Send As"
+$right = $ext.psbase.Children | ? { $_.DisplayName -eq $permission }
+$CanonicalNameHash = @{}
+$DomainPrincipalHash = @{}
+$DistinguishedNameHash = $Set | Group-Object -AsHashTable -Property DistinguishedName -AsString
+$MissingOrAmbiguousRecipients = @()
+$mailboxCounter = 0
+$setSize = $set.count
+Foreach ($mailbox in $Set)
+{
+    if ($PSBoundParameters.ContainsKey('ExcludedIdentities'))
+    {
+        if ($excludedPermissionHoldersGUIDHash.ContainsKey($mailbox.guid.Guid))
+        {
+            continue
+        }
+    }
+    #GatherPermissions
+	#Progress Activity
+    if($setSize -gt 0){
+        $mailboxCounter++
+        Write-Progress -Activity "Retrieving Permissions" -status "Items processed: $($mailboxCounter) of $($setSize)" -percentComplete (($mailboxCounter / $setSize)*100)
+    }
+    $ID = $mailbox.PrimarySMTPAddress.ToString();
+    $message = "Collect permissions for $($ID)"
+	Write-Log -Message $message -EntryType Attempting -Verbose
+    $rawPermissions = @(
+        #Get Delegate Users (actual permissions are stored in the mailbox . . . so these are not true delegates just a likely correlation to delegates) This section should also check if the grantsendonbehalfto permission holder is a group, because it can be . . .
+        If ($IncludeSendOnBehalf)
+        {
+            $sbPermissionHolders = $mailbox.grantsendonbehalfto.ToArray()
+            foreach ($sb in $sbPermissionHolders)
+            {
+                New-PermissionExportObject -TargetMailbox $mailbox -PermissionHolderIdentity $sb -PermissionType SendOnBehalf -AssignmentType Direct
+            }
+        }
+        #Get Full Access Users
+        If ($IncludeFullAccess)
+        {
+            $faPermissionHolders = @(
+                $splat = @{Identity = $ID; ErrorAction = 'SilentlyContinue'}
+                Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-MailboxPermission' -splat $splat |
+                Where-Object -FilterScript {
+                    ($_.AccessRights -like “*FullAccess*”) -and 
+                    ($_.IsInherited -eq $false) -and -not 
+                    ($_.User -like “NT AUTHORITY\SELF”) -and -not 
+                    ($_.User -like "S-1-5*")
+                } | Select-Object -ExpandProperty User
+            )
+            foreach ($fa in $faPermissionHolders)
+            {
+                New-PermissionExportObject -TargetMailbox $mailbox -PermissionHolderIdentity $fa -PermissionType FullAccess -AssignmentType Direct
+            }
+        }
+        #Get Send As Users
+        If ($IncludeSendAs)
+        {
+            $userDN = [ADSI]("LDAP://$($mailbox.DistinguishedName)")
+            $saPermissionHolders = @(
+                $userDN.psbase.ObjectSecurity.Access | Where-Object -FilterScript { $_.ObjectType -eq [GUID]$right.RightsGuid.Value } | 
+                Select-Object -ExpandProperty identityreference | Where-Object -FilterScript {$_ -notlike "NT AUTHORITY\SELF"}
+            )
+            foreach ($sa in $saPermissionHolders)
+            {
+                New-PermissionExportObject -TargetMailbox $mailbox -PermissionHolderIdentity $sa -PermissionType SendAs -AssignmentType Direct
+            }
+		}
+    )
+    #compile permissions information and permission holders identity details
+    foreach ($rp in $rawPermissions)
+    {
+        $Recipient = @()
+        switch ($rp.PermissionType)
+        {
+            'SendOnBehalf' #uses CanonicalName format!?!
+            {
+                if ($CanonicalNameHash.ContainsKey($rp.PermissionHolderIdentity))
+                {
+                    $Recipient = @($CanonicalNameHash.$($rp.PermissionHolderIdentity))
+                }
+            }
+            Default #both SendAs and FullAccess use Domain\SecurityPrincipal format
+            {
+                if ($DomainPrincipalHash.ContainsKey($rp.PermissionHolderIdentity))
+                {
+                    $Recipient = @($DomainPrincipalHash.$($rp.PermissionHolderIdentity))
+                }
+            }
+        }
+        if ($Recipient.Count -eq 0)
+        {
+            $splat = @{Identity = $rp.PermissionHolderIdentity; ErrorAction = 'SilentlyContinue'}
+            $Recipient = @(Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-Recipient' -splat $splat)
+        }
+        switch ($Recipient.Count)
+        {
+            1
+            {
+                $Recipient = $Recipient[0]
+                $MorePermissionExportProperties = @{
+                    PermissionHolderObjectGUID = $Recipient.guid.Guid
+                    PermissionHolderDistinguishedName = $Recipient.DistinguishedName
+                    PermissionHolderPrimarySMTPAddress = $Recipient.PrimarySmtpAddress.ToString()
+                    PermissionHolderRecipientType = $Recipient.RecipientType
+                    PermissionHolderRecipientTypeDetails = $Recipient.RecipientTypeDetails
+                }
+                Add-Member -InputObject $rp -NotePropertyMembers $MorePermissionExportProperties
+                switch ($rp.permissionType) {
+                    'SendOnBehalf' {$CanonicalNameHash.$($rp.PermissionHolderIdentity) = $Recipient}
+                    Default {$DomainPrincipalHash.$($rp.PermissionHolderIdentity) = $Recipient}
+                }
+            }#1
+            Default
+            {
+                $MissingOrAmbiguousRecipients += $rp.PermissionHolderIdentity
+                $MorePermissionExportProperties = @{
+                    PermissionHolderObjectGUID = $null
+                    PermissionHolderDistinguishedName = $null
+                    PermissionHolderPrimarySMTPAddress = $null
+                    PermissionHolderRecipientType = $null
+                    PermissionHolderRecipientTypeDetails = $null
+                }
+                Add-Member -InputObject $rp -NotePropertyMembers $MorePermissionExportProperties
+            }#Default
+        }#switch Recipient.Count
+    }#foreach Rp in RawPermissions
+    if ($expandGroups)
+    {
+        #enumerate groups: http://stackoverflow.com/questions/8055338/listing-users-in-ad-group-recursively-with-powershell-script-without-cmdlets/8055996#8055996
+        $expandedPermissions = @(
+            $groupPerms = @($rawPermissions | Where-Object -FilterScript {$_.PermissionHolderRecipientTypeDetails -like '*Group*'})
+            foreach ($gp in $groupPerms)
+            {
+                $dsLookFor.Filter = "(&(memberof:1.2.840.113556.1.4.1941:=$($gp.PermissionHolderDistinguishedName))(objectCategory=user))" 
+                $dsLookFor.SearchScope = "subtree" 
+                $lstUsr = $dsLookFor.findall()
+                foreach ($u in $lstUsr)
+                {
+                    $uDN = $u.Properties.distinguishedname
+                    if ($DistinguishedNameHash.ContainsKey("$uDN"))
+                    {$Recipient = @($DistinguishedNameHash."$uDN")}
+                    else
+                    {
+                        $splat = @{Identity = "$uDN"; ErrorAction = 'SilentlyContinue'}
+                        $Recipient = @(Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-Recipient' -splat $splat)
+                    }
+                    switch ($Recipient.count)
+                    {
+                        1
+                        {
+                            $Recipient = $Recipient[0]
+                            $GPEOParams = @{
+                                TargetMailbox = $Mailbox
+                                PermissionHolderIdentity = $Recipient.DistinguishedName
+                                PermissionType = $gp.PermissionType
+                                AssignmentType = 'GroupMembership'
+                                PermissionGroupObjectGUID = $gp.PermissionHolderObjectGUID 
+                            }
+                            $rawEP = New-PermissionExportObject @GPEOParams
+                            $MorePermissionExportProperties = @{
+                                PermissionHolderObjectGUID = $Recipient.guid.Guid
+                                PermissionHolderDistinguishedName = $Recipient.DistinguishedName
+                                PermissionHolderPrimarySMTPAddress = $Recipient.PrimarySmtpAddress.ToString()
+                                PermissionHolderRecipientType = $Recipient.RecipientType
+                                PermissionHolderRecipientTypeDetails = $Recipient.RecipientTypeDetails
+                            }
+                            Add-Member -InputObject $rawEP -NotePropertyMembers $MorePermissionExportProperties
+                            Write-Output $rawEP
+                            $DistinguishedNameHash.$uDN = $Recipient
+                        }#1
+                        Default
+                        {
+                            $MissingOrAmbiguousRecipients += $rp.PermissionHolderIdentity
+                        }#Default
+                    }#switch Recipient.Count
+                }#foreach u in lstusr
+            }#foreach gp in groupPerms
+        )#expandedPermissions
+        if ($dropExpandedGroups)
+        {
+            $rawPermissions = $rawPermissions | Where-Object -FilterScript {$_.PermissionHolderRecipientTypeDetails -notlike '*group*'}
+        }
+    }
+    #combine and remove and self permissions that came in through expansion or otherwise
+    if ($expandedPermissions.Count -ge 1)
+    {$AllPermissionsOutput = $expandedPermissions + $rawPermissions | Where-Object -FilterScript {$_.TargetObjectGUID -ne $_.PermissionHolderObjectGUID}}
+    else
+    {$AllPermissionsOutput = $rawPermissions | Where-Object -FilterScript {$_.TargetObjectGUID -ne $_.PermissionHolderObjectGUID}}
+    #remove permissions from excludedPermissionHolders if needed
+    if ($PSBoundParameters.ContainsKey('ExcludedIdentities'))
+    {
+        $AllPermissionsOutput = @(
+            $AllPermissionsOutput | Where-Object -FilterScript {
+                ($_.permissionHolderObjectGUID -eq $null) -or
+                (-not $excludedPermissionHoldersGUIDHash.ContainsKey($_.PermissionHolderObjectGUID))
+            }
+        )
+    }
+    if ($AllPermissionsOutput.Count -eq 0)
+    {
+        $GPEOParams = @{
+            TargetMailbox = $mailbox
+            PermissionHolderIdentity = 'Not Applicable'
+            PermissionType = 'None'
+            AssignmentType = 'None'
+        }
+        $NonPerm = New-PermissionExportObject @GPEOParams
+        $MorePermissionExportProperties = @{
+            PermissionHolderObjectGUID = $null
+            PermissionHolderDistinguishedName = $null
+            PermissionHolderPrimarySMTPAddress = 'None'
+            PermissionHolderRecipientType = $null
+            PermissionHolderRecipientTypeDetails = $null
+        }
+        Add-Member -InputObject $NonPerm -NotePropertyMembers $MorePermissionExportProperties
+        Write-Output $NonPerm
+    }
+    else
+    {
+        Write-Output $AllPermissionsOutput
+    }
+    Write-Log -Message $message -EntryType Succeeded -Verbose
+}#Foreach mailbox in set
+    if ($MissingOrAmbiguousRecipients.count -ge 1)
+    {
+        $MissingOrAmbiguousRecipients = $MissingOrAmbiguousRecipients | Sort-Object | Select-Object -Unique
+        $joinedIDs = $MissingOrAmbiguousRecipients -join '|'
+        Write-Log -Message "The following identities are missing (as recipient objects) or ambiguous: $joinedIDs" -EntryType Notification -Verbose -ErrorLog
+    }
 }
 function Import-OBCScriptOutputFromCSV
 {
