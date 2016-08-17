@@ -2,6 +2,7 @@ USE [MigrationPandT];
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 CREATE TABLE [dbo].[ADUsersStaging](
+	AccountExpirationDate [datetime],
     altRecipient [nvarchar](MAX) NULL,
     c [nvarchar](MAX) NULL,
     CanonicalName [nvarchar](MAX) NULL,
@@ -10,6 +11,7 @@ CREATE TABLE [dbo].[ADUsersStaging](
     co [nvarchar](MAX) NULL,
     country [nvarchar](MAX) NULL,
     company [nvarchar] (64) NULL,
+    createTimeStamp [datetime] NULL,
     deliverandRedirect [nvarchar](MAX) NULL,
     department [nvarchar](MAX) NULL,
     displayName [nvarchar](MAX) NULL,
@@ -36,10 +38,12 @@ CREATE TABLE [dbo].[ADUsersStaging](
     GivenName [nvarchar](MAX) NULL,
     homeMDB [nvarchar](MAX) NULL,
     homeMTA [nvarchar](MAX) NULL,
+    LastLogonDate [nvarchar](MAX) NULL,
     legacyExchangeDN [nvarchar](MAX) NULL,
     Mail [nvarchar](MAX) NULL,
     mailNickname [nvarchar](MAX) NULL,
     memberof [nvarchar](MAX) NULL,
+    modifyTimeStamp [datetime] NULL,
     [mS-DS-ConsistencyGuid] [nvarchar](MAX) NULL,
     msExchArchiveGUID [nvarchar](MAX) NULL,
     msExchArchiveName [nvarchar](MAX) NULL,
@@ -53,7 +57,6 @@ CREATE TABLE [dbo].[ADUsersStaging](
     msExchHomeServerName [nvarchar](MAX) NULL,
     msExchMailboxGUID [nvarchar](MAX) NULL,
     msExchMasterAccountSID [nvarchar](MAX) NULL,
-    msExchWhenMailboxCreated [nvarchar](MAX) NULL,
     msExchPoliciesExcluded [nvarchar](MAX) NULL,
     msExchRecipientDisplayType [nvarchar](MAX) NULL,
     msExchRecipientTypeDetails [nvarchar](MAX) NULL,
@@ -61,6 +64,8 @@ CREATE TABLE [dbo].[ADUsersStaging](
     msExchUsageLocation [nvarchar](MAX) NULL,
     msExchUserCulture [nvarchar](MAX) NULL,
     msExchVersion [nvarchar](MAX) NULL,
+    msExchWhenMailboxCreated [datetime] NULL,
+	notes [nvarchar](MAX) NULL,
 	physicalDeliveryOfficeName [nvarchar] (MAX) NULL,
     ObjectGUID [nvarchar](MAX) NULL,
     proxyAddresses [nvarchar](MAX) NULL,
@@ -69,10 +74,6 @@ CREATE TABLE [dbo].[ADUsersStaging](
     SurName [nvarchar](MAX) NULL,
     targetAddress [nvarchar](MAX) NULL,
     userPrincipalName [nvarchar](MAX) NULL,
-    whenChanged [nvarchar](MAX) NULL,
-    whenCreated [nvarchar](MAX) NULL,
-    AccountExpirationDate [nvarchar](MAX) NULL,
-    LastLogonDate [nvarchar](MAX) NULL,
-    createTimeStamp [nvarchar](MAX) NULL,
-    modifyTimeStamp [nvarchar](MAX) NULL
+    whenChanged [datetime] NULL,
+    whenCreated [datetime] NULL
 );
