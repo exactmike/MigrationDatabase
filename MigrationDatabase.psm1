@@ -234,9 +234,14 @@ $PermissionType
 ,
 $TrusteeGroupObjectGUID
 ,
+$ParentPermissionIdentity
+,
 [string]$SourceExchangeOrganization = $ExchangeOrganization
 )
+$Script:PermissionIdentity++
 [pscustomobject]@{
+    PermissionIdentity = $Script:PermissionIdentity
+    ParentPermissionIdentity = $ParentPermissionIdentity
     SourceExchangeOrganization = $SourceExchangeOrganization
     TargetObjectGUID = $TargetMailbox.Guid.Guid
     TargetDistinguishedName = $TargetMailbox.DistinguishedName
@@ -547,6 +552,7 @@ $DistinguishedNameHash = $InScopeMailboxes | Group-Object -AsHashTable -Property
 $MissingOrAmbiguousRecipients = @()
 $mailboxCounter = 0
 $InScopeMailboxCount = $InScopeMailboxes.count
+[uint32]$Script:PermissionIdentity = 0
 Foreach ($mailbox in $InScopeMailboxes)
 {
     $mailboxCounter++
@@ -679,6 +685,7 @@ Foreach ($mailbox in $InScopeMailboxes)
                                 AssignmentType = 'GroupMembership'
                                 TrusteeGroupObjectGUID = $gp.TrusteeObjectGUID
                                 SourceExchangeOrganization = $ExchangeOrganization
+                                ParentPermissionIdentity = $gp.PermissionIdentity
                             }
                             $rawEP = New-PermissionExportObject @GPEOParams
                             Add-TrusteeAttributesToPermissionExportObject -rawPermissionExportObject $rawEP -TrusteeRecipientObject $Recipient
@@ -694,6 +701,7 @@ Foreach ($mailbox in $InScopeMailboxes)
                                 AssignmentType = 'GroupMembership'
                                 TrusteeGroupObjectGUID = $gp.TrusteeObjectGUID
                                 SourceExchangeOrganization = $ExchangeOrganization
+                                ParentPermissionIdentity = $gp.PermissionIdentity
                             }
                             $rawEP = New-PermissionExportObject @GPEOParams
                             Add-TrusteeAttributesToPermissionExportObject -rawPermissionExportObject $rawEP -TrusteeRecipientObject $null
@@ -749,22 +757,143 @@ Foreach ($mailbox in $InScopeMailboxes)
         Write-Log -Message "The following identities are missing (as recipient objects) or ambiguous: $joinedIDs" -EntryType Notification -Verbose -ErrorLog
     }
 }
-function Import-OBCScriptOutputFromCSV
+#Mostly OBC still 
+Function Create-Batches
 {
 [cmdletbinding()]
 param(
-[parameter(Mandatory)]
-$Path
+    [Parameter(Mandatory=$true)]
+    $PermissionsData
 )
-$files = @(Get-ChildItem -Path $Path -Filter OBC-*.csv)
-$obcOutputs = @{}
-foreach ($file in $files)
+    $PermissionsData = $PermissionsData | ? TrusteeRecipientType -NotLike '*group' #| ? {$_.TrusteeRecipientType -ne $null -and $_.TrusteePrimarySMTPAddress -eq 'none'}
+    Write-StartFunctionStatus -CallingFunction $MyInvocation.MyCommand
+    $hashData = $PermissionsData | Group TargetPrimarySMTPAddress -AsHashTable -AsString
+	$hashDataByDelegate = $PermissionsData | Group TrusteePrimarySMTPAddress -AsHashTable -AsString
+	$usersWithNoDependents = New-Object System.Collections.ArrayList
+    $hashDataSize = $hashData.Count
+    $yyyyMMdd = Get-Date -Format 'yyyyMMdd'
+    try{
+        Write-Log -Message "Build ArrayList for Mailboxes with no dependents" -Verbose
+        If($hashDataByDelegate["None"].count -gt 0){
+		    $hashDataByDelegate["None"] | %{$_.TargetPrimarySMTPAddress} | %{[void]$usersWithNoDependents.Add($_)}
+	    }	    
+
+        Write-Log -Message "Identify users with no permissions on them, nor them have perms on another" -Verbose
+	    If($usersWithNoDependents.count -gt 0){
+		    $($usersWithNoDependents) | %{
+			    if($hashDataByDelegate.ContainsKey($_)){
+				    $usersWithNoDependents.Remove($_)
+			    }	
+		    }
+            
+            Write-Log -Message "Remove users with no Target/Trustee relationships from hash Data" -Verbose
+		    $usersWithNoDependents | %{$hashData.Remove($_)}
+		    #Clean out hashData of users in hash data with no delegates, otherwise they'll get batched
+            Write-Log -Message "Clean out hashData of users in hash data with no Trustees" -Verbose
+		    foreach($key in $($hashData.keys)){
+                    if(($hashData[$key] | select -expandproperty TrusteePrimarySMTPAddress ) -eq "None"){
+				    $hashData.Remove($key)
+			    }
+		    }
+	    }
+        #Execute batch functions
+        $script:batch = @{}
+        If(($hashData.count -ne 0) -or ($usersWithNoDependents.count -ne 0)){
+            Write-Log -Message "Run Find-Links function" -Verbose
+            while($hashData.count -ne 0){$hashData = Find-Links -hashData $hashData} 
+            Write-Log -message "Run Create-BatchOutput function" -Verbose
+            Create-BatchOutput -batchResults $batch -usersWithNoDepsResults $usersWithNoDependents
+        }
+    }
+    catch {
+        Write-Log -message "Error: $_" -ErrorLog -Verbose
+    }
+}
+Function Find-Links
 {
-    $importedname = $file.BaseName.replace('-','')
-    $obcOutputs.$importedname = Import-Csv -Path $file.FullName
+[cmdletbinding()]
+param(
+$hashData
+)
+    try{
+        Write-Log -message "Hash Data Size: $($hashData.count)" -Verbose
+        $nextInHash = $hashData.Keys | select -first 1
+        $script:batch.Add($nextInHash,$hashData[$nextInHash])
+	
+	    Do{
+		    $checkForMatches = $false
+		    foreach($key in $($hashData.keys)){
+	            $Script:comparisonCounter++ 
+			
+			    Write-Progress -Activity "Analyzing Data to Populate Batches" -status "Items remaining: $($hashData.Count)" -percentComplete (($hashDataSize-$hashData.Count) / $hashDataSize*100) -CurrentOperation 
+	            #Checks
+			    $usersHashData = $($hashData[$key]) | %{$_.TargetPrimarySMTPAddress}
+                $usersBatch = $($script:batch[$nextInHash]) | %{$_.TargetPrimarySMTPAddress}
+                $delegatesHashData = $($hashData[$key]) | %{$_.TrusteePrimarySMTPAddress} 
+			    $delegatesBatch = $($script:batch[$nextInHash]) | %{$_.TrusteePrimarySMTPAddress}
+
+			    $ifMatchesHashUserToBatchUser = [bool]($usersHashData | ?{$usersBatch -contains $_})
+			    $ifMatchesHashDelegToBatchDeleg = [bool]($delegatesHashData | ?{$delegatesBatch -contains $_})
+			    $ifMatchesHashUserToBatchDelegate = [bool]($usersHashData | ?{$delegatesBatch -contains $_})
+			    $ifMatchesHashDelegToBatchUser = [bool]($delegatesHashData | ?{$usersBatch -contains $_})
+			
+			    If($ifMatchesHashDelegToBatchDeleg -OR $ifMatchesHashDelegToBatchUser -OR $ifMatchesHashUserToBatchUser -OR $ifMatchesHashUserToBatchDelegate){
+	                if(($key -ne $nextInHash)){ 
+					    $script:batch[$nextInHash] += $hashData[$key]
+					    $checkForMatches = $true
+	                }
+	                $hashData.Remove($key)
+	            }
+	        }
+	    } Until ($checkForMatches -eq $false)
+        
+        Write-Output $hashData 
+	}
+	catch{
+        Write-Log -message "Error: $_" -Verbose -ErrorLog
+    }
 }
-Write-Output $obcOutputs
+Function Create-BatchOutput
+{
+[cmdletbinding()]
+param
+(
+$batchResults
+,
+$usersWithNoDepsResults
+)
+$batchNum = 0
+try
+{
+    $batchesOutput = @(
+	    foreach($key in $batchResults.keys){
+            $batchNum++
+            $batchName = "$batchNum"
+	        $BatchTargetsAndTrustees = @(
+	            $($batch[$key]) | Select-Object -ExpandProperty TargetPrimarySMTPAddress
+                $($batch[$key]) | Select-Object -ExpandProperty TrusteePrimarySMTPAddress
+            )
+	        $BatchTargetsAndTrustees | Select-Object -Unique | ForEach-Object {
+                [pscustomobject]@{BatchName = $batchName; BatchMember = $_}
+	        }
+        }
+	    If($usersWithNoDepsResults.count -gt 0){
+		    $batchNum++
+            $batchName = "0"
+		    foreach($user in $usersWithNoDepsResults){
+                [pscustomobject]@{BatchName = $batchName; BatchMember = $user}
+		    }
+	    }
+    )#BatchesOutput
+    Write-Output $batchesOutput
+    Write-Log -Message "Batches created: $($batchNum)" -Verbose
+    Write-Log -Message "Number of comparisons: $($Script:comparisonCounter)" -Verbose
 }
+catch
+{
+    Write-Log -message "Error: $_" -Verbose -ErrorLog
+}
+} 
 ##########################################################################################################
 #OneShell Data Access Functions
 ##########################################################################################################
