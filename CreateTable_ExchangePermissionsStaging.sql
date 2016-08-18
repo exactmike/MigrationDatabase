@@ -2,6 +2,8 @@ USE [MigrationPAndT];
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 CREATE TABLE [dbo].[ExchangePermissionsStaging](
+	[PermissionIdentity][bigint] NOT NULL,
+	[ParentPermissionIdentity] [bigint] NULL,
 	[AssignmentType] [nvarchar](50) NOT NULL,
 	[PermissionType] [nvarchar](20) NOT NULL,
 	[SourceExchangeOrganization] [nvarchar](50) NOT NULL,
