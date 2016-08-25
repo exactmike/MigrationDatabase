@@ -401,6 +401,7 @@ $propertyset += @{n='msExchMailboxGUID';e={(Get-GuidFromByteArray -GuidByteArray
 $propertyset += @{n='msExchArchiveGUID';e={(Get-GuidFromByteArray -GuidByteArray $_.msExchArchiveGUID).guid}}
 $propertyset += @{n='ObjectGUID';e={$_.ObjectGUID.guid}}
 $propertyset += @{n='SourceOrganization';e={$SourceAD}}
+$propertyset += @{n='ExpectedAzureADImmutableID';e={Get-ImmutableIDFromGUID -Guid $_.ObjectGUID}}
 $ADUsersexport = @($RawADUsers | Select-Object -Property $propertyset -ErrorAction SilentlyContinue) # -ExcludeProperty ObjectGUID,msExchMailboxGUID,msExchArchiveGUID,CanonicalName,DistinguishedName)
 Write-Output $ADUsersexport
 }

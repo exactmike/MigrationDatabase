@@ -4,6 +4,7 @@ SET QUOTED_IDENTIFIER ON;
 CREATE TABLE [dbo].[ADUsers](
 	[ID] [int] IDENTITY(1,1) NOT NULL,
 	[ObjectGUID] [nchar](36) NOT NULL,
+    ExpectedAzureADImmutableID [nvarchar](24) NULL,	
 	[AccountExpirationDate] [datetime] NULL,
 	[altRecipient] [nvarchar](256) NULL,
 	[c] [nchar](2) NULL,
