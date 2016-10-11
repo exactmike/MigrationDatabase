@@ -431,6 +431,34 @@ $propertyset += @{n='SourceOrganization';e={$ExchangeOrganization}}
 $ExchangeRecipientsExport = @($RawRecipients | Select-Object -Property $propertyset) #-ErrorAction SilentlyContinue
 Write-Output $ExchangeRecipientsExport
 }
+function Export-ExchangeMailbox
+{
+[cmdletbinding()]
+param
+(
+[parameter(Mandatory)]
+$ExchangeOrganization
+#,
+#$Filter
+#,
+#$PropertySet
+)
+Connect-Exchange -ExchangeOrganization $ExchangeOrganization > $null
+$Splat = @{
+    ResultSize = 'Unlimited'
+}
+$RawRecipients = Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-Mailbox' -splat $Splat
+$MVAttributes = @('AcceptMessagesOnlyFrom','AcceptMessagesOnlyFromDLMembers','AcceptMessagesOnlyFromSendersOrMembers','AddressListMembership','ArchiveName','AuditAdmin','AuditDelegate','AuditOwner','BypassModerationFromSendersOrMembers','EmailAddresses','ExtensionCustomAttribute1','ExtensionCustomAttribute2','ExtensionCustomAttribute3','ExtensionCustomAttribute4','ExtensionCustomAttribute5','GrantSendOnBehalfTo','Languages','MailTipTranslations','ModeratedBy','ObjectClass','PersistedCapabilities','PoliciesExcluded','PoliciesIncluded','ProtocolSettings','RejectMessagesFrom','RejectMessagesFromDLMembers','RejectMessagesFromSendersOrMembers','ResourceCustom')
+$SVAttributes = @('AddressBookPolicy','ActiveSyncMailboxPolicy','ActiveSyncMailboxPolicyIsDefaulted','AddressBookPolicy','Alias','AntispamBypassEnabled','ArchiveDatabase','ArchiveDomain','ArchiveQuota','ArchiveStatus','ArchiveWarningQuota','AuthenticationType','AuditEnabled','AuditLogAgeLimit','CalendarRepairDisabled','CalendarVersionStoreDisabled','CustomAttribute1','CustomAttribute10','CustomAttribute11','CustomAttribute12','CustomAttribute13','CustomAttribute14','CustomAttribute15','CustomAttribute2','CustomAttribute3','CustomAttribute4','CustomAttribute5','CustomAttribute6','CustomAttribute7','CustomAttribute8','CustomAttribute9','Database','DeliverToMailboxAndForward','DisabledArchiveDatabase','Department','DisplayName','DistinguishedName','DowngradeHighPriorityMessagesEnabled','EmailAddressPolicyEnabled','ExchangeSecurityDescriptor','ExchangeUserAccountControl','ExchangeVersion','ExternalDirectoryObjectId','ExternalOofOptions','ForwardingAddress','ForwardingSmtpAddress','HasPicture','HasSpokenName','HiddenFromAddressListsEnabled','Identity','ImmutableId','IsLinked','IsMailboxEnabled','IsResource','IsShared','IsValid','LastExchangeChangedTime','LegacyExchangeDN','LinkedMasterAccount','LitigationHoldDate','LitigationHoldEnabled','LitigationHoldOwner','MailboxMoveBatchName','MailboxMoveFlags','MailboxMoveRemoteHostName','MailboxMoveSourceMDB','MailboxMoveStatus','MailboxMoveTargetMDB','MailboxPlan','MailTip','ManagedFolderMailboxPolicy','MaxBlockedSenders','MaxReceiveSize','MaxSafeSenders','MaxSendSize','MessageTrackingReadStatusEnabled','ModerationEnabled','Name','ObjectCategory','Office','OfflineAddressBook','OrganizationalUnit','OrganizationId','OriginatingServer','PrimarySmtpAddress','PSComputerName','PSShowComputerName','RecipientLimits','RecipientType','RecipientTypeDetails','RecoverableItemsQuota','RecoverableItemsWarningQuota','RemoteAccountPolicy','RemoteRecipientType','RequireSenderAuthenticationEnabled','ResourceCapacity','ResourceType','RetainDeletedItemsFor','RetainDeletedItemsUntilBackup','RetentionComment','RetentionHoldEnabled','RetentionPolicy','RetentionUrl','RoleAssignmentPolicy','RulesQuota','SamAccountName','SCLDeleteEnabled','SCLDeleteThreshold','SCLJunkEnabled','SCLJunkThreshold','SCLQuarantineEnabled','SCLQuarantineThreshold','SCLRejectEnabled','SCLRejectThreshold','SendModerationNotifications','ServerLegacyDN','ServerName','SharingPolicy','SimpleDisplayName','SingleItemRecoveryEnabled','SKUAssigned','StartDateForRetentionHold','ThrottlingPolicy','UMEnabled','UsageLocation','UseDatabaseQuotaDefaults','UseDatabaseRetentionDefaults','UserPrincipalName','WhenChanged','WhenChangedUTC','WhenCreated','WhenCreatedUTC','WhenMailboxCreated','WindowsEmailAddress','WindowsLiveID')
+$propertyset = Get-CSVExportPropertySet -Delimiter '|' -MultiValuedAttributes $MVAttributes -ScalarAttributes $SVAttributes 
+$propertyset += @{n='Guid';e={$_.GUID.guid}}
+$propertyset += @{n='ArchiveGuid';e={$_.ArchiveGuid.guid}}
+$propertyset += @{n='ExchangeGuid';e={$_.ExchangeGuid.guid}}
+$propertyset += @{n='DisabledArchiveGuid';e={$_.DisabledArchiveGuid.guid}}
+$propertyset += @{n='SourceOrganization';e={$ExchangeOrganization}}
+$ExchangeMailboxesExport = @($RawRecipients | Select-Object -Property $propertyset) #-ErrorAction SilentlyContinue
+Write-Output $ExchangeMailboxesExport
+}
 function Export-MailboxStatistics
 {
 [cmdletbinding()]
