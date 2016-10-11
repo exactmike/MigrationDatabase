@@ -8,6 +8,7 @@ AS S
 ON S.ObjectGUID = T.ObjectGUID
 WHEN MATCHED THEN
 	UPDATE SET
+		T.ExpectedAzureADImmutableID = S.ExpectedAzureADImmutableID,
 		T.AccountExpirationDate = S.AccountExpirationDate,
 		T.altRecipient = S.altRecipient,
 		T.c = S.c,
@@ -84,6 +85,7 @@ WHEN MATCHED THEN
 WHEN NOT MATCHED THEN
 	INSERT (
 		ObjectGUID
+		,ExpectedAzureADImmutableID
 		,AccountExpirationDate
 		,altRecipient
 		,c
@@ -160,6 +162,7 @@ WHEN NOT MATCHED THEN
 	)
 	VALUES (
 		S.ObjectGUID
+		,S.ExpectedAzureADImmutableID
 		,S.AccountExpirationDate
 		,S.altRecipient
 		,S.c
