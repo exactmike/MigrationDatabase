@@ -457,6 +457,8 @@ $RawMailboxStatistics = @(
         Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-MailboxStatistics' -splat $GetMailboxStatisticsSplat
     }
 )
+#Remove Soft Deleted Disconnected Mailbox Results
+$RawMailboxStatistics = @($RawMailboxStatistics | Where-Object -FilterScript {$_.DisconnectReason -eq 'SoftDeleted'})
 # $MVAttributes = @() # None needed for this data
 $SVAttributes = @('AssociatedItemCount','Database','DatabaseName','DeletedItemCount','DisconnectDate','DisconnectReason','DisplayName','IsArchiveMailbox','IsQuarantined','IsValid','ItemCount','LastLoggedOnUserAccount','LastLogoffTime','LastLogonTime','LegacyDN','MailboxGuid','MailboxTableIdentifier','MapiIdentity','ObjectClass','ServerName','StorageLimitStatus','TotalItemSize','TotalDeletedItemSize')
 $propertyset = Get-CSVExportPropertySet -Delimiter '|' -ScalarAttributes $SVAttributes 
