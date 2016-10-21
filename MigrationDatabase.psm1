@@ -178,8 +178,8 @@ if ($ValidateColumnMappings)
     if ($comparisonResults.count -ne 0)
     {
         Write-Output $comparisonResults
-        $error = New-ErrorRecord -Exception System.NotSupportedException -Message "SQL Table $SQLTable columns and DataTable columns do not match." -ErrorCategory InvalidData -TargetObject $SQLTable -ErrorId "1"
-        $PSCmdlet.ThrowTerminatingError($error)
+        $MyError = New-ErrorRecord -Exception System.NotSupportedException -Message "SQL Table $SQLTable columns and DataTable columns do not match." -ErrorCategory InvalidData -TargetObject $SQLTable -ErrorId "1"
+        $PSCmdlet.ThrowTerminatingError($MyError)
     }
 }
 #Truncate the Staging Table if requested
@@ -204,7 +204,7 @@ if ($TruncateSQLTable -and $PSCmdlet.ShouldProcess($SQLTable,'Truncate Table'))
 #Do the Bulk Insert into the Staging Table
 $bulkCopy = new-object ("Data.SqlClient.SqlBulkCopy") $($SQLConnection.ConnectionString)
 $bulkCopy.ColumnMappings.Clear()
-$PropertyNames | foreach {$bulkCopy.ColumnMappings.Add($_,$_) | out-null} 
+$PropertyNames | ForEach-Object {$bulkCopy.ColumnMappings.Add($_,$_) | out-null} 
 $bulkCopy.BatchSize = $DataTable.Rows.Count
 $bulkCopy.BulkCopyTimeout = 0
 $bulkCopy.DestinationTableName = $SQLTable
@@ -302,7 +302,7 @@ param
 (
 [string]$Database = 'MigrationPAndT'
 ,
-[string]$ComputerName = $(hostname.exe)
+[string]$ComputerName = $($env:COMPUTERNAME)
 )
 $SQLServerConnection = New-SQLServerConnection -server $ComputerName
 #Add code to check for DB existence: select name from sys.databases
@@ -539,7 +539,7 @@ switch ($PSCmdlet.ParameterSetName)
         Write-Log -Message "Operation: Scoped Permission retrieval with $($Identity.Count) Identities provided." -Verbose
         $message = "Retrieve mailbox object for each provided Identity in Exchange Organization $ExchangeOrganization."
         Write-Log -Message $message -EntryType Attempting -Verbose
-        $InScopeMailboxes = @($Identity | % {
+        $InScopeMailboxes = @($Identity | ForEach-Object {
                 $splat = @{Identity = $_}
                 Invoke-ExchangeCommand -ExchangeOrganization $ExchangeOrganization -cmdlet 'Get-Mailbox' -splat $splat
             }
@@ -576,7 +576,7 @@ $ext = [ADSI]("LDAP://CN=Extended-Rights," + $dse.ConfigurationNamingContext)
 $dn = [ADSI]"LDAP://$($dse.DefaultNamingContext)"
 $dsLookFor = New-Object System.DirectoryServices.DirectorySearcher($dn)
 $permission = "Send As"
-$right = $ext.psbase.Children | ? { $_.DisplayName -eq $permission }
+$right = $ext.psbase.Children | Where-Object { $_.DisplayName -eq $permission }
 $CanonicalNameHash = @{}
 $DomainPrincipalHash = @{}
 $DistinguishedNameHash = $InScopeMailboxes | Group-Object -AsHashTable -Property DistinguishedName -AsString
@@ -796,33 +796,33 @@ param(
     [Parameter(Mandatory=$true)]
     $PermissionsData
 )
-    $PermissionsData = $PermissionsData | ? TrusteeRecipientType -NotLike '*group' #| ? {$_.TrusteeRecipientType -ne $null -and $_.TrusteePrimarySMTPAddress -eq 'none'}
+    $PermissionsData = $PermissionsData | Where-Object TrusteeRecipientType -NotLike '*group' #| ? {$_.TrusteeRecipientType -ne $null -and $_.TrusteePrimarySMTPAddress -eq 'none'}
     Write-StartFunctionStatus -CallingFunction $MyInvocation.MyCommand
-    $hashData = $PermissionsData | Group TargetPrimarySMTPAddress -AsHashTable -AsString
-	$hashDataByDelegate = $PermissionsData | Group TrusteePrimarySMTPAddress -AsHashTable -AsString
+    $hashData = $PermissionsData | Group-Object TargetPrimarySMTPAddress -AsHashTable -AsString
+	$hashDataByDelegate = $PermissionsData | Group-Object TrusteePrimarySMTPAddress -AsHashTable -AsString
 	$usersWithNoDependents = New-Object System.Collections.ArrayList
     $hashDataSize = $hashData.Count
     $yyyyMMdd = Get-Date -Format 'yyyyMMdd'
     try{
         Write-Log -Message "Build ArrayList for Mailboxes with no dependents" -Verbose
         If($hashDataByDelegate["None"].count -gt 0){
-		    $hashDataByDelegate["None"] | %{$_.TargetPrimarySMTPAddress} | %{[void]$usersWithNoDependents.Add($_)}
+		    $hashDataByDelegate["None"] | ForEach-Object{$_.TargetPrimarySMTPAddress} | ForEach-Object{[void]$usersWithNoDependents.Add($_)}
 	    }	    
 
         Write-Log -Message "Identify users with no permissions on them, nor them have perms on another" -Verbose
 	    If($usersWithNoDependents.count -gt 0){
-		    $($usersWithNoDependents) | %{
+		    $($usersWithNoDependents) | ForEach-Object{
 			    if($hashDataByDelegate.ContainsKey($_)){
 				    $usersWithNoDependents.Remove($_)
 			    }	
 		    }
             
             Write-Log -Message "Remove users with no Target/Trustee relationships from hash Data" -Verbose
-		    $usersWithNoDependents | %{$hashData.Remove($_)}
+		    $usersWithNoDependents | ForEach-Object{$hashData.Remove($_)}
 		    #Clean out hashData of users in hash data with no delegates, otherwise they'll get batched
             Write-Log -Message "Clean out hashData of users in hash data with no Trustees" -Verbose
 		    foreach($key in $($hashData.keys)){
-                    if(($hashData[$key] | select -expandproperty TrusteePrimarySMTPAddress ) -eq "None"){
+                    if(($hashData[$key] | Select-Object -expandproperty TrusteePrimarySMTPAddress ) -eq "None"){
 				    $hashData.Remove($key)
 			    }
 		    }
@@ -848,7 +848,7 @@ $hashData
 )
     try{
         Write-Log -message "Hash Data Size: $($hashData.count)" -Verbose
-        $nextInHash = $hashData.Keys | select -first 1
+        $nextInHash = $hashData.Keys | Select-Object -first 1
         $script:batch.Add($nextInHash,$hashData[$nextInHash])
 	
 	    Do{
@@ -858,15 +858,15 @@ $hashData
 			
 			    Write-Progress -Activity "Analyzing Data to Populate Batches" -status "Items remaining: $($hashData.Count)" -percentComplete (($hashDataSize-$hashData.Count) / $hashDataSize*100) -CurrentOperation 
 	            #Checks
-			    $usersHashData = $($hashData[$key]) | %{$_.TargetPrimarySMTPAddress}
-                $usersBatch = $($script:batch[$nextInHash]) | %{$_.TargetPrimarySMTPAddress}
-                $delegatesHashData = $($hashData[$key]) | %{$_.TrusteePrimarySMTPAddress} 
-			    $delegatesBatch = $($script:batch[$nextInHash]) | %{$_.TrusteePrimarySMTPAddress}
+			    $usersHashData = $($hashData[$key]) | ForEach-Object{$_.TargetPrimarySMTPAddress}
+                $usersBatch = $($script:batch[$nextInHash]) | ForEach-Object{$_.TargetPrimarySMTPAddress}
+                $delegatesHashData = $($hashData[$key]) | ForEach-Object{$_.TrusteePrimarySMTPAddress} 
+			    $delegatesBatch = $($script:batch[$nextInHash]) | ForEach-Object{$_.TrusteePrimarySMTPAddress}
 
-			    $ifMatchesHashUserToBatchUser = [bool]($usersHashData | ?{$usersBatch -contains $_})
-			    $ifMatchesHashDelegToBatchDeleg = [bool]($delegatesHashData | ?{$delegatesBatch -contains $_})
-			    $ifMatchesHashUserToBatchDelegate = [bool]($usersHashData | ?{$delegatesBatch -contains $_})
-			    $ifMatchesHashDelegToBatchUser = [bool]($delegatesHashData | ?{$usersBatch -contains $_})
+			    $ifMatchesHashUserToBatchUser = [bool]($usersHashData | Where-Object{$usersBatch -contains $_})
+			    $ifMatchesHashDelegToBatchDeleg = [bool]($delegatesHashData | Where-Object{$delegatesBatch -contains $_})
+			    $ifMatchesHashUserToBatchDelegate = [bool]($usersHashData | Where-Object{$delegatesBatch -contains $_})
+			    $ifMatchesHashDelegToBatchUser = [bool]($delegatesHashData | Where-Object{$usersBatch -contains $_})
 			
 			    If($ifMatchesHashDelegToBatchDeleg -OR $ifMatchesHashDelegToBatchUser -OR $ifMatchesHashUserToBatchUser -OR $ifMatchesHashUserToBatchDelegate){
 	                if(($key -ne $nextInHash)){ 
