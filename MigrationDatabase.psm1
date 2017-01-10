@@ -127,7 +127,8 @@ param
 [string]$SQLConnectionName
 ,
 [Parameter(Mandatory)]
-[System.Data.DataTable]$DataTable
+#[System.Data.DataTable]
+$DataTable
 ,
 [switch]$ValidateColumnMappings
 ,
