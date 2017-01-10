@@ -298,10 +298,10 @@ function New-UserDSN
 [cmdletbinding()]
 param
 (
-[Parameter(]
+[Parameter()]
 [string]$DSNName = 'MPTDatabase'
 ,
-[Parameter(]
+[Parameter()]
 [string]$DBName = 'MigrationPAndT'
 ,
 [Parameter()]
