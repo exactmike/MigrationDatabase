@@ -292,6 +292,37 @@ else
 }
 Add-Member -InputObject $rawPermissionExportObject -NotePropertyMembers $MorePermissionExportProperties
 }
+function New-UserDSN
+{
+[cmdletbinding()]
+param
+(
+[Parameter(]
+[string]$DSNName = 'MPTDatabase'
+,
+[Parameter(]
+[string]$DBName = 'MigrationPAndT'
+,
+[Parameter()]
+[string]$Description = 'Migration Planning and Tracking Database'
+,
+[Parameter(Mandatory)]
+[string]$DBServer
+)
+$RegObjectPath = Join-Path 'HKCU:\SOFTWARE\ODBC\ODBC.INI' $DSNName
+New-Item -Path $RegObjectPath -ItemType Directory
+Set-ItemProperty -Path $RegObjectPath -Name Driver -Value 'C:\Windows\system32\sqlncli11.dll'
+Set-ItemProperty -Path $RegObjectPath -Name Description -Value $DSNName
+Set-ItemProperty -Path $RegObjectPath -Name Server -Value $DBServer
+Set-ItemProperty -Path $RegObjectPath -Name Trusted_Connection -Value 'Yes'
+Set-ItemProperty -Path $RegObjectPath -Name Database -Value $DBName
+## This is required to allow the ODBC connection to show up in the ODBC Administrator application.
+$RegObject2Path = 'HKCU:\SOFTWARE\ODBC\ODBC.INI\ODBC Data Sources'
+if (-not (Test-Path -LiteralPath $RegObject2Path)) {
+    New-Item -Path $RegObject2Path -ItemType Directory
+}
+Set-ItemProperty -Path $RegObject2Path -Name $DSNName -Value 'SQL Server Native Client 11.0'
+}
 ##########################################################################################################
 #Initial Database Configuration
 ##########################################################################################################
@@ -597,7 +628,7 @@ Foreach ($mailbox in $InScopeMailboxes)
     $ID = $mailbox.PrimarySMTPAddress.ToString();
     $message = "Collect permissions for $($ID)"
     Write-Progress -Activity $message -status "Items processed: $($mailboxCounter) of $($InScopeMailboxCount)" -percentComplete (($mailboxCounter / $InScopeMailboxCount)*100)
-	Write-Log -Message $message -EntryType Attempting -Verbose
+	  Write-Log -Message $message -EntryType Attempting -Verbose
     $rawPermissions = @(
         #Get Delegate Users (actual permissions are stored in the mailbox . . . so these are not true delegates just a likely correlation to delegates) This section should also check if the grantsendonbehalfto permission holder is a group, because it can be . . .
         If ($IncludeSendOnBehalf)
