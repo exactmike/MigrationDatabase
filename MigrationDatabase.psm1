@@ -494,7 +494,9 @@ $SourceAD
 ,
 #$Filter
 #,
-$Properties = @(Get-OneShellVariable -Name ADUserAttributes | Select-Object -ExpandProperty Value)
+[parameter()]
+[ValidateSet('SourceAD','OneShellDefault')]
+[string]$ADPropertySet = 'OneShellDefault'
 #,
 #$PropertySet
 )
@@ -503,6 +505,17 @@ Connect-ADInstance -ActiveDirectoryInstance $SourceAD > $null
 Push-Location
 Set-Location "$($SourceAD):\"
 #$RawADUsers = Get-ADUser -LDAPFilter '(&((sAMAccountType=805306368))(!(userAccountControl:1.2.840.113556.1.4.803:=2)))' -Properties  $Properties | Select-Object -Property $Properties -ErrorAction SilentlyContinue
+switch ($ADPropertySet)
+{
+    'SourceAD'
+    {
+        $Properties = Get-OrgProfileSystem | Where-Object -FilterScript {$_.SystemType -EQ 'ActiveDirectoryInstances'} | Where-Object -filterscript {$_.Name -eq $SourceAD} | Select-Object -ExpandProperty UserAttributes
+    }
+    'OneShellDefault'
+    {
+        $Properties = @(Get-OneShellVariable -Name ADUserAttributes | Select-Object -ExpandProperty Value)
+    }
+}
 $RawADUsers = Get-ADUser -LDAPFilter '(sAMAccountType=805306368)' -Properties  $Properties | Select-Object -Property $Properties -ErrorAction SilentlyContinue
 Pop-Location
 $MVAttributes = @('msExchPoliciesExcluded','msexchextensioncustomattribute1','msexchextensioncustomattribute2','msexchextensioncustomattribute3','msexchextensioncustomattribute4','msexchextensioncustomattribute5','memberof','proxyAddresses')
@@ -969,7 +982,7 @@ $hashData
 		    foreach ($key in $($hashData.keys)) 
         {
 	        $Script:comparisonCounter++
-			    Write-Progress -Activity "Analyzing Data to Populate Batches" -status "Items remaining: $($hashData.Count)" -percentComplete (($hashDataSize-$hashData.Count) / $hashDataSize*100) -CurrentOperation
+			    Write-Progress -Activity "Analyzing Data to Populate Batches" -status "Items remaining: $($hashData.Count)" -percentComplete (($hashDataSize-$hashData.Count) / $hashDataSize*100) -CurrentOperation $key
 	        #Checks
 			    $usersHashData = $($hashData[$key]) | ForEach-Object {$_.TargetPrimarySMTPAddress}
           $usersBatch = $($script:batch[$nextInHash]) | ForEach-Object {$_.TargetPrimarySMTPAddress}
