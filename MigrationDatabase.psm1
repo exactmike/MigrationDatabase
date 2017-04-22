@@ -1057,10 +1057,36 @@ catch
 }
 } 
 ##########################################################################################################
-#OneShell Data Access Functions
+#MCTL Data Management Functions
 ##########################################################################################################
 function Get-SourceData
 {
 #Get latest data from SQL 
   $SourceData = Invoke-Sqlcmd -Query 'Select * from dbo.MigrationCandidateList' @Global:InvokeSQLParams | Select-Object -Property * -ExcludeProperty Item
+}
+function Set-MCTLWaveEntry
+{
+[cmdletbinding()]
+param(
+[parameter(Mandatory)]
+$Wave
+,
+[parameter(Mandatory)]
+[string[]]$ObjectGUID
+)
+$UpdateMCTLWaveEntry = "UPDATE [dbo].[WaveMembers] SET [Wave] = $Wave FROM [dbo].[WaveMembers] WHERE [ObjectGUID] IN ($($ObjectGUID -join ','))"
+$UpdateMCTLWaveEntry
+}
+function New-MCTLWaveEntry
+{
+[cmdletbinding()]
+param(
+[parameter(Mandatory)]
+$Wave
+,
+[parameter(Mandatory)]
+[string]$ObjectGUID
+)
+$NewMCTLWaveEntry = "INSERT INTO [dbo].[WaveMembers]([Wave],[ObjectGUID]) VALUES($Wave,$ObjectGUID)"
+$NewMCTLWaveEntry
 }
