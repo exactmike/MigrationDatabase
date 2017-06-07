@@ -82,7 +82,7 @@ WHEN MATCHED THEN
 		T.userPrincipalName = S.userPrincipalName,
 		T.whenchanged = S.whenchanged,
 		T.whenCreated = S.whencreated
-WHEN NOT MATCHED THEN
+WHEN NOT MATCHED BY TARGET THEN
 	INSERT (
 		ObjectGUID
 		,ExpectedAzureADImmutableID
@@ -237,7 +237,10 @@ WHEN NOT MATCHED THEN
 		,S.whenchanged
 		,S.whencreated
 	)
-	OUTPUT deleted.*, $action, inserted.* ; 
+WHEN NOT MATCHED BY SOURCE
+	THEN DELETE	
+OUTPUT deleted.*, $action, inserted.* ; 
 	--INTO dbo.ADUsersMergeResults;
+
 END;
 --@@ROWCOUNT

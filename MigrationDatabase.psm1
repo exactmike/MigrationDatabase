@@ -1079,7 +1079,7 @@ $Wave
 [string[]]$ObjectGUID
 )
 $UpdateMCTLWaveEntry = "UPDATE [dbo].[WaveMembers] SET [Wave] = $Wave FROM [dbo].[WaveMembers] WHERE [ObjectGUID] IN ($($ObjectGUID -join ','))"
-$UpdateMCTLWaveEntry
+Invoke-SQLServerQuery -connection $SQLConnections[0] -sql $UpdateMCTLWaveEntry -ErrorAction Stop
 }
 function New-MCTLWaveEntry
 {
@@ -1092,5 +1092,5 @@ $Wave
 [string]$ObjectGUID
 )
 $NewMCTLWaveEntry = "INSERT INTO [dbo].[WaveMembers]([Wave],[ObjectGUID]) VALUES($Wave,$ObjectGUID)"
-$NewMCTLWaveEntry
+Invoke-SQLServerQuery -connection $SQLConnections[0] -sql $NewMCTLWaveEntry -ErrorAction Stop 
 }
