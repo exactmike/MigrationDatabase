@@ -1,6 +1,3 @@
-USE [MigrationPandT];
-SET ANSI_NULLS ON;
-SET QUOTED_IDENTIFIER ON;
 CREATE TABLE [dbo].[ExchangeMailboxesStaging](
     SourceOrganization  [nvarchar](36) NULL,
     AcceptMessagesOnlyFrom [nvarchar](max) NULL,

@@ -1,7 +1,4 @@
-﻿USE [MigrationPandT];
-SET ANSI_NULLS ON;
-SET QUOTED_IDENTIFIER ON;
-CREATE TABLE [dbo].[AzureUsersStaging](
+﻿CREATE TABLE [dbo].[AzureUsersStaging](
 	--[ID] [int] IDENTITY(1,1) NOT NULL,
     SourceOrganization [nvarchar](510) NULL,
 	AlternateEmailAddresses [nvarchar](1024) NULL,

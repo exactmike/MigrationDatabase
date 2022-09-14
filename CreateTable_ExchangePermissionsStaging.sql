@@ -1,6 +1,3 @@
-USE [MigrationPAndT];
-SET ANSI_NULLS ON;
-SET QUOTED_IDENTIFIER ON;
 CREATE TABLE [dbo].[ExchangePermissionsStaging](
 	[PermissionIdentity][bigint] NOT NULL,
 	[ParentPermissionIdentity] [bigint] NULL,
@@ -21,4 +18,3 @@ CREATE TABLE [dbo].[ExchangePermissionsStaging](
 	[TrusteeRecipientTypeDetails] [nvarchar](100) NULL,
 ) ON [PRIMARY]
 ;
-

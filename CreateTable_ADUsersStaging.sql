@@ -1,6 +1,3 @@
-USE [MigrationPandT];
-SET ANSI_NULLS ON;
-SET QUOTED_IDENTIFIER ON;
 CREATE TABLE [dbo].[ADUsersStaging](
 	AccountExpirationDate [datetime],
     altRecipient [nvarchar](MAX) NULL,

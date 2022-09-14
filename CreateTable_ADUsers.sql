@@ -1,10 +1,7 @@
-USE [MigrationPAndT];
-SET ANSI_NULLS ON;
-SET QUOTED_IDENTIFIER ON;
 CREATE TABLE [dbo].[ADUsers](
 	[ID] [int] IDENTITY(1,1) NOT NULL,
 	[ObjectGUID] [nchar](36) NOT NULL,
-    ExpectedAzureADImmutableID [nvarchar](24) NULL,	
+    ExpectedAzureADImmutableID [nvarchar](24) NULL,
 	[AccountExpirationDate] [datetime] NULL,
 	[altRecipient] [nvarchar](256) NULL,
 	[c] [nchar](2) NULL,
@@ -78,7 +75,7 @@ CREATE TABLE [dbo].[ADUsers](
 	[userPrincipalName] [nvarchar](1024) NULL,
     [whenChanged] [datetime] NULL,
     [whenCreated] [datetime] NULL
- CONSTRAINT [PK_ADUsers] PRIMARY KEY NONCLUSTERED 
+ CONSTRAINT [PK_ADUsers] PRIMARY KEY NONCLUSTERED
 (
 	[ObjectGUID] ASC
 ));
@@ -92,7 +89,7 @@ CREATE NONCLUSTERED INDEX [NCI_Mail] ON [dbo].[ADUsers]
 (
 	[Mail] ASC
 )
-INCLUDE ( 	
+INCLUDE (
 	[SamAccountName],
 	[targetAddress],
 	[SourceOrganization],
@@ -108,4 +105,3 @@ INCLUDE (
 	[targetAddress],
 	[userPrincipalName]
 ) ;
-

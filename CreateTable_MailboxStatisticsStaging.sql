@@ -1,7 +1,4 @@
-﻿USE [MigrationPAndT];
-SET ANSI_NULLS ON;
-SET QUOTED_IDENTIFIER ON;
-CREATE TABLE [dbo].[MailboxStatisticsStaging](
+﻿CREATE TABLE [dbo].[MailboxStatisticsStaging](
     SourceOrganization  [nvarchar](36) NULL,
     [AssociatedItemCount] [BIGINT] NULL,
     [Database] [NVARCHAR](256) NULL,
